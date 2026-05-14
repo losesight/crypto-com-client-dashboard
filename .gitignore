@@ -1,0 +1,38 @@
+node_modules
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Database / runtime data — keep static asset folders, drop everything else
+data/*
+!data/templates/
+!data/visitor-templates/
+*.db
+*.db-shm
+*.db-wal
+
+# Dev-only screenshots / scratch
+_review/
+
+# Local secrets / dev artifacts
+cookies.txt
+*.session

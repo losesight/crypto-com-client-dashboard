@@ -1,0 +1,202 @@
+{"level":"info","message":"╔══════════════════════════════════════════╗","timestamp":"2026-04-14 23:24:24.554"}
+{"level":"info","message":"║   Oxylabs Panel Scraper Toolkit          ║","timestamp":"2026-04-14 23:24:24.555"}
+{"level":"info","message":"╚══════════════════════════════════════════╝","timestamp":"2026-04-14 23:24:24.555"}
+{"level":"info","message":"Entry URL:   https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:24:24.556"}
+{"level":"info","message":"Auth mode:   credential","timestamp":"2026-04-14 23:24:24.556"}
+{"level":"info","message":"Max depth:   5 | Max pages: 200","timestamp":"2026-04-14 23:24:24.556"}
+{"level":"info","message":"Concurrency: 3 | Delay: 1000ms","timestamp":"2026-04-14 23:24:24.556"}
+{"level":"info","message":"Output:      ./output","timestamp":"2026-04-14 23:24:24.556"}
+{"level":"info","message":"Performing credential-based login...","timestamp":"2026-04-14 23:24:24.556"}
+{"level":"info","message":"Authenticating via credential login at https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:24:24.558"}
+{"level":"info","message":"Login mode: multi-step","timestamp":"2026-04-14 23:24:24.559"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 25465ms","timestamp":"2026-04-14 23:24:50.024"}
+{"level":"info","message":"Login page loaded successfully after credentials submitted","timestamp":"2026-04-14 23:24:50.025"}
+{"level":"warn","message":"No cookies could be extracted from the HTML. Will rely on session_id pinning.","timestamp":"2026-04-14 23:24:50.045"}
+{"level":"warn","message":"If pages appear unauthenticated, export cookies manually and use AUTH_MODE=cookie","timestamp":"2026-04-14 23:24:50.045"}
+{"level":"info","message":"Session cookies saved to output\\session-cookies.json","timestamp":"2026-04-14 23:24:50.047"}
+{"level":"info","message":"Credential login complete — cookies captured and will be sent with every request","timestamp":"2026-04-14 23:24:50.047"}
+{"level":"warn","message":"No cookies extracted — relying on session_id pinning (10 min limit)","timestamp":"2026-04-14 23:24:50.047"}
+{"level":"warn","message":"If pages appear unauthenticated, export cookies from your browser instead","timestamp":"2026-04-14 23:24:50.047"}
+{"level":"info","message":"Starting crawl from https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:24:50.047"}
+{"level":"info","message":"Config: maxDepth=5, maxPages=200, concurrency=3","timestamp":"2026-04-14 23:24:50.047"}
+{"level":"info","message":"Output directories initialized at ./output","timestamp":"2026-04-14 23:24:50.048"}
+{"level":"info","message":"[1/200] Processing: https://issues-crypto.com/client/dashboard (depth 0)","timestamp":"2026-04-14 23:24:50.049"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 16813ms","timestamp":"2026-04-14 23:25:06.863"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 16597ms","timestamp":"2026-04-14 23:25:23.494"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [15003] in 14645ms","timestamp":"2026-04-14 23:25:38.140"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/3 for \"fetch https://issues-crypto.com/client/dashboard\" after 1935ms","timestamp":"2026-04-14 23:25:38.392"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 2/3 for \"fetch https://issues-crypto.com/client/dashboard\" after 3847ms","timestamp":"2026-04-14 23:25:40.583"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:25:44.676"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:25:44.677"}
+{"level":"warn","message":"XhrFetcher: failed to capture pattern \".json\" from https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:25:44.677"}
+{"level":"info","message":"[2/200] Processing: https://issues-crypto.com/client/flows (depth 1)","timestamp":"2026-04-14 23:25:44.679"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/3 for \"fetch https://issues-crypto.com/client/flows\" after 1793ms","timestamp":"2026-04-14 23:25:44.910"}
+{"level":"info","message":"[3/200] Processing: https://issues-crypto.com/client/control (depth 1)","timestamp":"2026-04-14 23:25:45.693"}
+{"level":"info","message":"[4/200] Processing: https://issues-crypto.com/client/mailer (depth 1)","timestamp":"2026-04-14 23:25:45.695"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/3 for \"fetch https://issues-crypto.com/client/control\" after 1735ms","timestamp":"2026-04-14 23:25:45.933"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/3 for \"fetch https://issues-crypto.com/client/mailer\" after 1760ms","timestamp":"2026-04-14 23:25:46.281"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 2/3 for \"fetch https://issues-crypto.com/client/flows\" after 3768ms","timestamp":"2026-04-14 23:25:46.929"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 2/3 for \"fetch https://issues-crypto.com/client/control\" after 4022ms","timestamp":"2026-04-14 23:25:47.897"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 2/3 for \"fetch https://issues-crypto.com/client/mailer\" after 4288ms","timestamp":"2026-04-14 23:25:48.271"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/flows\"","timestamp":"2026-04-14 23:25:50.966"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/flows: Request failed with status code 400","timestamp":"2026-04-14 23:25:50.966"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/flows: Request failed with status code 400","timestamp":"2026-04-14 23:25:50.966"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/control\"","timestamp":"2026-04-14 23:25:52.148"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/control: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.148"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/control: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.148"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/mailer\"","timestamp":"2026-04-14 23:25:52.808"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/mailer: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.808"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/mailer: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.808"}
+{"level":"info","message":"[5/200] Processing: https://issues-crypto.com/client/settings (depth 1)","timestamp":"2026-04-14 23:25:52.808"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/3 for \"fetch https://issues-crypto.com/client/settings\" after 1979ms","timestamp":"2026-04-14 23:25:53.017"}
+{"level":"info","message":"[6/200] Processing: https://issues-crypto.com/client (depth 1)","timestamp":"2026-04-14 23:25:53.821"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/3 for \"fetch https://issues-crypto.com/client\" after 1727ms","timestamp":"2026-04-14 23:25:54.046"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 2/3 for \"fetch https://issues-crypto.com/client/settings\" after 4414ms","timestamp":"2026-04-14 23:25:56.052"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 2/3 for \"fetch https://issues-crypto.com/client\" after 4262ms","timestamp":"2026-04-14 23:25:56.952"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/settings\"","timestamp":"2026-04-14 23:26:00.690"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/settings: Request failed with status code 400","timestamp":"2026-04-14 23:26:00.690"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/settings: Request failed with status code 400","timestamp":"2026-04-14 23:26:00.690"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client\"","timestamp":"2026-04-14 23:26:01.442"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client: Request failed with status code 400","timestamp":"2026-04-14 23:26:01.442"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client: Request failed with status code 400","timestamp":"2026-04-14 23:26:01.442"}
+{"level":"info","message":"Saved 6 discovered URLs to output\\discovered-urls.json","timestamp":"2026-04-14 23:26:01.445"}
+{"level":"info","message":"Saved 6 request log entries to output\\logs\\requests.jsonl","timestamp":"2026-04-14 23:26:01.445"}
+{"level":"info","message":"Saved sitemap to output\\sitemap.json","timestamp":"2026-04-14 23:26:01.446"}
+{"level":"info","message":"Crawl complete. Visited: 6, Discovered: 6","timestamp":"2026-04-14 23:26:01.446"}
+{"level":"info","message":"Crawl completed in 71.4s","timestamp":"2026-04-14 23:26:01.446"}
+{"level":"info","message":"Results saved to ./output","timestamp":"2026-04-14 23:26:01.446"}
+{"level":"info","message":"╔══════════════════════════════════════════╗","timestamp":"2026-04-14 23:28:27.490"}
+{"level":"info","message":"║   Oxylabs Panel Scraper Toolkit          ║","timestamp":"2026-04-14 23:28:27.492"}
+{"level":"info","message":"╚══════════════════════════════════════════╝","timestamp":"2026-04-14 23:28:27.492"}
+{"level":"info","message":"Entry URL:   https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:28:27.492"}
+{"level":"info","message":"Auth mode:   credential","timestamp":"2026-04-14 23:28:27.492"}
+{"level":"info","message":"Max depth:   5 | Max pages: 200","timestamp":"2026-04-14 23:28:27.492"}
+{"level":"info","message":"Concurrency: 3 | Delay: 1000ms","timestamp":"2026-04-14 23:28:27.492"}
+{"level":"info","message":"Output:      ./output","timestamp":"2026-04-14 23:28:27.492"}
+{"level":"info","message":"Verifying credential-based login...","timestamp":"2026-04-14 23:28:27.493"}
+{"level":"info","message":"Verifying credential login at https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:28:27.493"}
+{"level":"info","message":"Login mode: multi-step","timestamp":"2026-04-14 23:28:27.493"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 29856ms","timestamp":"2026-04-14 23:28:57.349"}
+{"level":"info","message":"Credential login verified — login instructions will be sent with every request","timestamp":"2026-04-14 23:28:57.350"}
+{"level":"info","message":"Login verified — every page request will re-authenticate within the Oxylabs browser","timestamp":"2026-04-14 23:28:57.350"}
+{"level":"info","message":"Starting crawl from https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:28:57.350"}
+{"level":"info","message":"Config: maxDepth=5, maxPages=200, concurrency=3","timestamp":"2026-04-14 23:28:57.350"}
+{"level":"info","message":"Output directories initialized at ./output","timestamp":"2026-04-14 23:28:57.351"}
+{"level":"info","message":"[1/200] Processing: https://issues-crypto.com/client/dashboard (depth 0)","timestamp":"2026-04-14 23:28:57.351"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 28194ms","timestamp":"2026-04-14 23:29:25.545"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 28730ms","timestamp":"2026-04-14 23:29:54.325"}
+{"level":"info","message":"╔══════════════════════════════════════════╗","timestamp":"2026-04-14 23:31:19.326"}
+{"level":"info","message":"║   Oxylabs Panel Scraper Toolkit          ║","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"╚══════════════════════════════════════════╝","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Entry URL:   https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Auth mode:   credential","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Max depth:   5 | Max pages: 200","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Concurrency: 1 | Delay: 3000ms","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Output:      ./output","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Verifying credential-based login...","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Verifying credential login at https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:31:19.328"}
+{"level":"info","message":"Login mode: multi-step","timestamp":"2026-04-14 23:31:19.329"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 26313ms","timestamp":"2026-04-14 23:31:45.642"}
+{"level":"info","message":"Credential login verified — login instructions will be sent with every request","timestamp":"2026-04-14 23:31:45.642"}
+{"level":"info","message":"Login verified — every page request will re-authenticate within the Oxylabs browser","timestamp":"2026-04-14 23:31:45.643"}
+{"level":"info","message":"Starting crawl from https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:31:45.643"}
+{"level":"info","message":"Config: maxDepth=5, maxPages=200, concurrency=1","timestamp":"2026-04-14 23:31:45.643"}
+{"level":"info","message":"Output directories initialized at ./output","timestamp":"2026-04-14 23:31:45.644"}
+{"level":"info","message":"[1/200] Processing: https://issues-crypto.com/client/dashboard (depth 0)","timestamp":"2026-04-14 23:31:45.645"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 25863ms","timestamp":"2026-04-14 23:32:11.508"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [15003] in 46116ms","timestamp":"2026-04-14 23:32:57.659"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/2 for \"fetch https://issues-crypto.com/client/dashboard\" after 2101ms","timestamp":"2026-04-14 23:32:57.888"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:00.224"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:00.224"}
+{"level":"warn","message":"XhrFetcher: failed to capture pattern \"/graphql\" from https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:00.224"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/2 for \"fetch https://issues-crypto.com/client/dashboard\" after 1934ms","timestamp":"2026-04-14 23:33:00.458"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:02.623"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:02.623"}
+{"level":"warn","message":"XhrFetcher: failed to capture pattern \".json\" from https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:02.623"}
+{"level":"info","message":"[2/200] Processing: https://issues-crypto.com/client/flows (depth 1)","timestamp":"2026-04-14 23:33:02.625"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/2 for \"fetch https://issues-crypto.com/client/dashboard\" after 1859ms","timestamp":"2026-04-14 23:33:02.886"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:04.985"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:04.985"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/flows: Request failed with status code 400","timestamp":"2026-04-14 23:33:04.985"}
+{"level":"info","message":"[3/200] Processing: https://issues-crypto.com/client/control (depth 1)","timestamp":"2026-04-14 23:33:04.985"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/2 for \"fetch https://issues-crypto.com/client/dashboard\" after 2244ms","timestamp":"2026-04-14 23:33:05.200"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:07.679"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:07.679"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/control: Request failed with status code 400","timestamp":"2026-04-14 23:33:07.680"}
+{"level":"info","message":"[4/200] Processing: https://issues-crypto.com/client/mailer (depth 1)","timestamp":"2026-04-14 23:33:07.680"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/2 for \"fetch https://issues-crypto.com/client/dashboard\" after 1780ms","timestamp":"2026-04-14 23:33:07.914"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:09.928"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:09.928"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/mailer: Request failed with status code 400","timestamp":"2026-04-14 23:33:09.928"}
+{"level":"info","message":"[5/200] Processing: https://issues-crypto.com/client/settings (depth 1)","timestamp":"2026-04-14 23:33:10.174"}
+{"error":"Request failed with status code 400","level":"warn","message":"Retry 1/2 for \"fetch https://issues-crypto.com/client/dashboard\" after 1909ms","timestamp":"2026-04-14 23:33:10.397"}
+{"level":"info","message":"╔══════════════════════════════════════════╗","timestamp":"2026-04-14 23:33:40.314"}
+{"level":"info","message":"║   Oxylabs Panel Scraper Toolkit          ║","timestamp":"2026-04-14 23:33:40.315"}
+{"level":"info","message":"╚══════════════════════════════════════════╝","timestamp":"2026-04-14 23:33:40.315"}
+{"level":"info","message":"Entry URL:   https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:33:40.315"}
+{"level":"info","message":"Auth mode:   credential","timestamp":"2026-04-14 23:33:40.315"}
+{"level":"info","message":"Max depth:   5 | Max pages: 200","timestamp":"2026-04-14 23:33:40.315"}
+{"level":"info","message":"Concurrency: 1 | Delay: 3000ms","timestamp":"2026-04-14 23:33:40.315"}
+{"level":"info","message":"Output:      ./output","timestamp":"2026-04-14 23:33:40.315"}
+{"level":"info","message":"Verifying credential-based login...","timestamp":"2026-04-14 23:33:40.316"}
+{"level":"info","message":"Verifying credential login at https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:33:40.316"}
+{"level":"info","message":"Login mode: multi-step","timestamp":"2026-04-14 23:33:40.316"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 22367ms","timestamp":"2026-04-14 23:34:02.683"}
+{"level":"info","message":"Credential login verified — login instructions will be sent with every request","timestamp":"2026-04-14 23:34:02.684"}
+{"level":"info","message":"Login verified — every page request will re-authenticate within the Oxylabs browser","timestamp":"2026-04-14 23:34:02.684"}
+{"level":"info","message":"Starting crawl from https://issues-crypto.com/client/dashboard","timestamp":"2026-04-14 23:34:02.684"}
+{"level":"info","message":"Config: maxDepth=5, maxPages=200, concurrency=1","timestamp":"2026-04-14 23:34:02.684"}
+{"level":"info","message":"Output directories initialized at ./output","timestamp":"2026-04-14 23:34:02.685"}
+{"level":"info","message":"[1/200] Processing: https://issues-crypto.com/client/dashboard (depth 0)","timestamp":"2026-04-14 23:34:02.685"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 24641ms","timestamp":"2026-04-14 23:34:27.326"}
+{"level":"info","message":"[2/200] Processing: https://issues-crypto.com/client/flows (depth 1)","timestamp":"2026-04-14 23:34:27.377"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 56359ms","timestamp":"2026-04-14 23:35:23.736"}
+{"level":"info","message":"[3/200] Processing: https://issues-crypto.com/client/control (depth 1)","timestamp":"2026-04-14 23:35:23.773"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 49061ms","timestamp":"2026-04-14 23:36:12.835"}
+{"level":"info","message":"[4/200] Processing: https://issues-crypto.com/client/mailer (depth 1)","timestamp":"2026-04-14 23:36:12.846"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 49884ms","timestamp":"2026-04-14 23:37:02.730"}
+{"level":"info","message":"[5/200] Processing: https://issues-crypto.com/client/settings (depth 1)","timestamp":"2026-04-14 23:37:02.744"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 49418ms","timestamp":"2026-04-14 23:37:52.162"}
+{"level":"info","message":"[6/200] Processing: https://issues-crypto.com/client (depth 1)","timestamp":"2026-04-14 23:37:52.179"}
+{"level":"info","message":"Fetched https://issues-crypto.com/client/dashboard [200] in 46697ms","timestamp":"2026-04-14 23:38:38.877"}
+{"level":"info","message":"Saved 6 discovered URLs to output\\discovered-urls.json","timestamp":"2026-04-14 23:38:38.900"}
+{"level":"info","message":"Saved 6 request log entries to output\\logs\\requests.jsonl","timestamp":"2026-04-14 23:38:38.901"}
+{"level":"info","message":"Saved sitemap to output\\sitemap.json","timestamp":"2026-04-14 23:38:38.903"}
+{"level":"info","message":"Crawl complete. Visited: 6, Discovered: 6","timestamp":"2026-04-14 23:38:38.903"}
+{"level":"info","message":"Crawl completed in 276.2s","timestamp":"2026-04-14 23:38:38.903"}
+{"level":"info","message":"Results saved to ./output","timestamp":"2026-04-14 23:38:38.903"}
+{"level":"info","message":"╔══════════════════════════════════════════╗","timestamp":"2026-04-15 00:59:10.685"}
+{"level":"info","message":"║   Oxylabs Panel Scraper Toolkit          ║","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"╚══════════════════════════════════════════╝","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"Entry URL:   https://issues-crypto.com/client/dashboard","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"Auth mode:   credential","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"Max depth:   5 | Max pages: 200","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"Concurrency: 1 | Delay: 3000ms","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"Output:      ./output","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"Verifying credential-based login...","timestamp":"2026-04-15 00:59:10.687"}
+{"level":"info","message":"Verifying credential login at https://issues-crypto.com/client/dashboard","timestamp":"2026-04-15 00:59:10.688"}
+{"level":"info","message":"Login mode: multi-step","timestamp":"2026-04-15 00:59:10.688"}
+{"level":"info","message":"[DRY RUN] https://issues-crypto.com/client/dashboard — serving cached HTML (45.4 KB)","timestamp":"2026-04-15 00:59:10.692"}
+{"level":"info","message":"Credential login verified — login instructions will be sent with every request","timestamp":"2026-04-15 00:59:10.692"}
+{"level":"info","message":"Login verified — every page request will re-authenticate within the Oxylabs browser","timestamp":"2026-04-15 00:59:10.692"}
+{"level":"info","message":"Starting crawl from https://issues-crypto.com/client/dashboard","timestamp":"2026-04-15 00:59:10.693"}
+{"level":"info","message":"Config: maxDepth=5, maxPages=200, concurrency=1","timestamp":"2026-04-15 00:59:10.693"}
+{"level":"info","message":"Output directories initialized at ./output","timestamp":"2026-04-15 00:59:10.693"}
+{"level":"info","message":"[1/200] Processing: https://issues-crypto.com/client/dashboard (depth 0)","timestamp":"2026-04-15 00:59:10.693"}
+{"level":"info","message":"[DRY RUN] https://issues-crypto.com/client/dashboard — serving cached HTML (45.4 KB)","timestamp":"2026-04-15 00:59:10.695"}
+{"level":"info","message":"[2/200] Processing: https://issues-crypto.com/client/flows (depth 1)","timestamp":"2026-04-15 00:59:14.640"}
+{"level":"info","message":"[DRY RUN] https://issues-crypto.com/client/dashboard — serving cached HTML (45.4 KB)","timestamp":"2026-04-15 00:59:14.642"}
+{"level":"info","message":"[3/200] Processing: https://issues-crypto.com/client/control (depth 1)","timestamp":"2026-04-15 00:59:18.536"}
+{"level":"info","message":"[DRY RUN] https://issues-crypto.com/client/dashboard — serving cached HTML (45.4 KB)","timestamp":"2026-04-15 00:59:18.538"}
+{"level":"info","message":"[4/200] Processing: https://issues-crypto.com/client/mailer (depth 1)","timestamp":"2026-04-15 00:59:21.020"}
+{"level":"info","message":"[DRY RUN] https://issues-crypto.com/client/dashboard — serving cached HTML (45.4 KB)","timestamp":"2026-04-15 00:59:21.022"}
+{"level":"info","message":"[5/200] Processing: https://issues-crypto.com/client/settings (depth 1)","timestamp":"2026-04-15 00:59:23.352"}
+{"level":"info","message":"[DRY RUN] https://issues-crypto.com/client/dashboard — serving cached HTML (45.4 KB)","timestamp":"2026-04-15 00:59:23.354"}
+{"level":"info","message":"[6/200] Processing: https://issues-crypto.com/client (depth 1)","timestamp":"2026-04-15 00:59:27.532"}
+{"level":"info","message":"[DRY RUN] https://issues-crypto.com/client/dashboard — serving cached HTML (45.4 KB)","timestamp":"2026-04-15 00:59:27.533"}
+{"level":"info","message":"Saved 6 discovered URLs to output\\discovered-urls.json","timestamp":"2026-04-15 00:59:27.580"}
+{"level":"info","message":"Saved 6 request log entries to output\\logs\\requests.jsonl","timestamp":"2026-04-15 00:59:27.580"}
+{"level":"info","message":"Saved sitemap to output\\sitemap.json","timestamp":"2026-04-15 00:59:27.581"}
+{"level":"info","message":"Crawl complete. Visited: 6, Discovered: 6","timestamp":"2026-04-15 00:59:27.581"}
+{"level":"info","message":"Crawl completed in 16.9s","timestamp":"2026-04-15 00:59:27.581"}
+{"level":"info","message":"Results saved to ./output","timestamp":"2026-04-15 00:59:27.581"}

@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-04-15T04:59:27.581Z",
+  "visited": [
+    "https://issues-crypto.com/client",
+    "https://issues-crypto.com/client/control",
+    "https://issues-crypto.com/client/dashboard",
+    "https://issues-crypto.com/client/flows",
+    "https://issues-crypto.com/client/mailer",
+    "https://issues-crypto.com/client/settings"
+  ],
+  "discovered": [
+    "https://issues-crypto.com/client",
+    "https://issues-crypto.com/client/control",
+    "https://issues-crypto.com/client/dashboard",
+    "https://issues-crypto.com/client/flows",
+    "https://issues-crypto.com/client/mailer",
+    "https://issues-crypto.com/client/settings"
+  ],
+  "visitedCount": 6,
+  "discoveredCount": 6
+}

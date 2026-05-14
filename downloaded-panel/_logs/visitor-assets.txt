@@ -1,0 +1,15 @@
+/_next/static/chunks/259-b8ba24460fe72549.js
+/_next/static/chunks/436-ab1195ac63b6a515.js
+/_next/static/chunks/app/layout-5f4432377d11fa93.js
+/_next/static/chunks/d46d1245-c8b31540c118e3ac.js
+/_next/static/chunks/main-app-6cf552111d9f97f7.js
+/_next/static/chunks/polyfills-42372ed130431b0a.js
+/_next/static/chunks/webpack-9921f3b0b554b2ea.js
+/_next/static/css/68165cb776a47886.css
+/_next/static/css/97cc91616cea400d.css
+/_next/static/media/017fd45b2c6557bc-s.p.woff2
+/_next/static/media/4cf2300e9c8272f7-s.p.woff2
+/_next/static/media/54302bc38fd09502-s.p.woff2
+/_next/static/media/93f479601ee12b01-s.p.woff2
+/_next/static/media/b5b83cdb4e0c5af3-s.p.woff2
+/_next/static/media/de30a32fa2634c38-s.p.ttf

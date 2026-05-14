@@ -1,0 +1,30 @@
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:25:44.676"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:25:44.677"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/flows\"","timestamp":"2026-04-14 23:25:50.966"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/flows: Request failed with status code 400","timestamp":"2026-04-14 23:25:50.966"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/flows: Request failed with status code 400","timestamp":"2026-04-14 23:25:50.966"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/control\"","timestamp":"2026-04-14 23:25:52.148"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/control: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.148"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/control: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.148"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/mailer\"","timestamp":"2026-04-14 23:25:52.808"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/mailer: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.808"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/mailer: Request failed with status code 400","timestamp":"2026-04-14 23:25:52.808"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client/settings\"","timestamp":"2026-04-14 23:26:00.690"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/settings: Request failed with status code 400","timestamp":"2026-04-14 23:26:00.690"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/settings: Request failed with status code 400","timestamp":"2026-04-14 23:26:00.690"}
+{"error":"Request failed with status code 400","level":"error","message":"All 3 attempts failed for \"fetch https://issues-crypto.com/client\"","timestamp":"2026-04-14 23:26:01.442"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client: Request failed with status code 400","timestamp":"2026-04-14 23:26:01.442"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client: Request failed with status code 400","timestamp":"2026-04-14 23:26:01.442"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:00.224"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:00.224"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:02.623"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:02.623"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:04.985"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:04.985"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/flows: Request failed with status code 400","timestamp":"2026-04-14 23:33:04.985"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:07.679"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:07.679"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/control: Request failed with status code 400","timestamp":"2026-04-14 23:33:07.680"}
+{"error":"Request failed with status code 400","level":"error","message":"All 2 attempts failed for \"fetch https://issues-crypto.com/client/dashboard\"","timestamp":"2026-04-14 23:33:09.928"}
+{"level":"error","message":"Failed to fetch https://issues-crypto.com/client/dashboard: Request failed with status code 400","timestamp":"2026-04-14 23:33:09.928"}
+{"level":"error","message":"Failed to process https://issues-crypto.com/client/mailer: Request failed with status code 400","timestamp":"2026-04-14 23:33:09.928"}

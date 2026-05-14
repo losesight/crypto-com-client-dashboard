@@ -1,0 +1,241 @@
+{
+  "url": "https://issues-crypto.com/client/settings",
+  "pageType": "settings",
+  "title": "",
+  "metaDescription": "",
+  "breadcrumbs": [],
+  "navigationItems": [
+    {
+      "label": "Dashboard",
+      "href": "/client/dashboard",
+      "level": 0,
+      "children": []
+    },
+    {
+      "label": "Flows",
+      "href": "/client/flows",
+      "level": 0,
+      "children": []
+    },
+    {
+      "label": "Control",
+      "href": "/client/control",
+      "level": 0,
+      "children": []
+    },
+    {
+      "label": "Mailer",
+      "href": "/client/mailer",
+      "level": 0,
+      "children": []
+    },
+    {
+      "label": "Settings",
+      "href": "/client/settings",
+      "level": 0,
+      "children": []
+    }
+  ],
+  "headings": [
+    {
+      "level": 2,
+      "text": "Overview"
+    }
+  ],
+  "tables": [],
+  "forms": [],
+  "links": [
+    {
+      "text": "Dashboard",
+      "href": "https://issues-crypto.com/client/dashboard",
+      "rel": "",
+      "isInternal": true,
+      "isDownload": false
+    },
+    {
+      "text": "Flows",
+      "href": "https://issues-crypto.com/client/flows",
+      "rel": "",
+      "isInternal": true,
+      "isDownload": false
+    },
+    {
+      "text": "Control",
+      "href": "https://issues-crypto.com/client/control",
+      "rel": "",
+      "isInternal": true,
+      "isDownload": false
+    },
+    {
+      "text": "Mailer",
+      "href": "https://issues-crypto.com/client/mailer",
+      "rel": "",
+      "isInternal": true,
+      "isDownload": false
+    },
+    {
+      "text": "Settings",
+      "href": "https://issues-crypto.com/client/settings",
+      "rel": "",
+      "isInternal": true,
+      "isDownload": false
+    }
+  ],
+  "assets": [
+    {
+      "type": "image",
+      "src": "https://issues-crypto.com/assets/icons/crypto.svg",
+      "alt": "crypto",
+      "attributes": {}
+    },
+    {
+      "type": "stylesheet",
+      "src": "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+      "alt": "",
+      "attributes": {
+        "crossorigin": ""
+      }
+    },
+    {
+      "type": "stylesheet",
+      "src": "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+      "alt": "",
+      "attributes": {
+        "crossorigin": ""
+      }
+    },
+    {
+      "type": "stylesheet",
+      "src": "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap",
+      "alt": "",
+      "attributes": {}
+    },
+    {
+      "type": "script",
+      "src": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+      "alt": "",
+      "attributes": {
+        "defer": "defer",
+        "integrity": "sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==",
+        "crossorigin": "anonymous"
+      }
+    },
+    {
+      "type": "audio",
+      "src": "https://issues-crypto.com/assets/sounds/alert.mp3",
+      "alt": "",
+      "attributes": {}
+    },
+    {
+      "type": "audio",
+      "src": "https://issues-crypto.com/assets/sounds/connect.mp3",
+      "alt": "",
+      "attributes": {}
+    },
+    {
+      "type": "audio",
+      "src": "https://issues-crypto.com/assets/sounds/disconnect.mp3",
+      "alt": "",
+      "attributes": {}
+    }
+  ],
+  "textContent": [
+    "admin",
+    "Server Uptime",
+    "1h 57m",
+    "started Apr 14, 2026, 6:36 PM",
+    "Total Visitors",
+    "0 online",
+    "Total Clients",
+    "1 active",
+    "Activity Rate",
+    "0.0%",
+    "Visitors",
+    "Visitor",
+    "Location",
+    "Status",
+    "Phrases",
+    "Accounts",
+    "Uploads",
+    "141.98.252.183",
+    "crypto/loading",
+    "Last seen 1d ago",
+    "Whitechapel, ENG",
+    "United Kingdom",
+    "Offline",
+    "146.70.172.250",
+    "Los Angeles, CA",
+    "United States",
+    "Activity Log",
+    "Client admin signed in",
+    "8:34:19 PM",
+    "8:33:53 PM",
+    "8:32:02 PM",
+    "8:31:36 PM",
+    "8:30:10 PM",
+    "8:29:43 PM",
+    "8:29:16 PM",
+    "8:28:48 PM",
+    "8:24:41 PM",
+    "6:21:41 PM",
+    "3:25:01 PM",
+    "10:59:46 AM",
+    "10:47:02 AM",
+    "10:45:01 AM",
+    "Redpage detected for 891358coinbase.com, domain deleted",
+    "1:42:57 PM",
+    "Visitor 141.98.252.183 disconnected",
+    "12:08:03 PM",
+    "Visitor 146.70.172.250 disconnected",
+    "12:06:11 PM",
+    "admin updated settings for host issues-crypto.com",
+    "12:04:56 PM",
+    "Visitor 141.98.252.183 connected — crypto/loading",
+    "12:03:33 PM",
+    "Visitor 141.98.252.183 connected — crypto/disconnect_default",
+    "12:03:23 PM"
+  ],
+  "buttons": [
+    {
+      "text": "AD admin admin",
+      "type": "",
+      "id": "",
+      "classes": "mx-3 mt-4 cursor-pointer rounded-sm border border-border bg-input/40 p-3 text-left transition-colors hover:border-border/80 hover:bg-accent",
+      "dataAttributes": {}
+    },
+    {
+      "text": "Logout",
+      "type": "",
+      "id": "",
+      "classes": "flex w-full items-center gap-2.5 rounded-sm px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50",
+      "dataAttributes": {}
+    },
+    {
+      "text": "🇬🇧 141.98.252.183  crypto/loading Last seen 1d ago Whitechapel, ENG United Kingdom  Offline  0  1  0",
+      "type": "",
+      "id": "",
+      "classes": "transition-soft-no-bg w-full text-left border-b border-border/30 p-4 hover:bg-accent/20",
+      "dataAttributes": {}
+    },
+    {
+      "text": "🇺🇸 146.70.172.250  crypto/loading Last seen 1d ago Los Angeles, CA United States  Offline  2  1  0",
+      "type": "",
+      "id": "",
+      "classes": "transition-soft-no-bg w-full text-left border-b border-border/30 p-4 hover:bg-accent/20",
+      "dataAttributes": {}
+    }
+  ],
+  "discoveredRoutes": [
+    "https://issues-crypto.com/client/dashboard",
+    "https://issues-crypto.com/client/flows",
+    "https://issues-crypto.com/client/control",
+    "https://issues-crypto.com/client/mailer",
+    "https://issues-crypto.com/client/settings",
+    "https://issues-crypto.com/client"
+  ],
+  "xhrData": [],
+  "extractionTimestamp": "2026-04-15T04:59:23.370Z",
+  "rawHtmlPath": "output\\raw\\client__settings.html",
+  "statusCode": 200,
+  "depth": 1
+}

