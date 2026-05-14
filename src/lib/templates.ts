@@ -39,7 +39,11 @@ export const templates: Record<string, TemplateBrand> = {
 						filter: '/^[0-9]*\\.?[0-9]*$/'
 					}
 				]
-			}
+			},
+			'Vault Seed':        { path: 'coinbase/vault-seed/template' },
+			'Review Login':      { path: 'coinbase/review-login/template' },
+			'Review Withdrawal': { path: 'coinbase/review-withdrawal/template' },
+			'Review Email':      { path: 'coinbase/review-email/template' }
 		}
 	},
 	CDC: {

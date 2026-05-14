@@ -179,7 +179,7 @@
 					<div class="text-center">
 						<Eye size={42} class="mx-auto mb-3 text-[var(--text-tertiary)]" />
 						<p class="text-sm font-semibold text-[var(--foreground)]">Pick a template to preview</p>
-						<p class="mt-1 text-xs text-[var(--muted-foreground)]">All 32 captured visitor pages render with full styling and assets</p>
+						<p class="mt-1 text-xs text-[var(--muted-foreground)]">All visitor pages render with full styling and assets</p>
 					</div>
 				</div>
 			{/if}

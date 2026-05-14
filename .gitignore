@@ -26,6 +26,7 @@ vite.config.ts.timestamp-*
 data/*
 !data/templates/
 !data/visitor-templates/
+!data/bip39/
 *.db
 *.db-shm
 *.db-wal
