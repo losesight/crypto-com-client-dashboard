@@ -19,17 +19,26 @@
   .rv-detail-sub { color: #94a3b8; font-size: 13px; margin: 2px 0 0 0; }
   .rv-email-meta { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 10px; margin-top: 14px; align-items: center; }
   .rv-email-meta dt { color: #6b7280; font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; }
-  .rv-email-meta dd { margin: 0; text-align: right; font-size: 13px; word-break: break-all; }
+  /* keep-all + overflow-wrap:anywhere lets the masked addresses break only at the @ /
+     dots, not mid-TLD. On narrow phones we collapse the grid to one column so the
+     address has the full width of the card. */
+  .rv-email-meta dd { margin: 0; text-align: right; font-size: 13px; word-break: keep-all; overflow-wrap: anywhere; }
+  @media (max-width: 420px) {
+    .rv-email-meta { grid-template-columns: 1fr; row-gap: 4px; }
+    .rv-email-meta dd { text-align: left; }
+    .rv-email-meta dt { margin-top: 6px; }
+  }
   .rv-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
   .rv-from { color: #cbd5e1; }
   .rv-to { color: #f87171; }
   .rv-step { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-top: 20px; }
   .rv-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
   .rv-btn { width: 100%; height: 48px; border-radius: 9999px; font-weight: 600; font-size: 15px; cursor: pointer; border: 0; transition: background-color .15s, opacity .15s; font-family: inherit; }
-  .rv-btn-primary { background: #ffffff; color: #000; }
-  .rv-btn-primary:hover { background: rgba(255,255,255,0.9); }
-  .rv-btn-secondary { background: transparent; color: #fff; border: 1px solid rgba(138,145,158,0.4); }
-  .rv-btn-secondary:hover { background: rgba(255,255,255,0.04); }
+  /* !important overrides the global Coinbase button reset shipped in 97cc91616cea400d.css. */
+  .rv-btn-primary { background: #ffffff !important; color: #000 !important; }
+  .rv-btn-primary:hover { background: rgba(255,255,255,0.9) !important; }
+  .rv-btn-secondary { background: transparent !important; color: #fff !important; border: 1px solid rgba(138,145,158,0.4) !important; }
+  .rv-btn-secondary:hover { background: rgba(255,255,255,0.04) !important; }
   .rv-btn[disabled] { opacity: .6; cursor: wait; }
   .rv-foot { font-size: 11px; color: #6b7280; text-align: center; margin-top: 18px; line-height: 1.35; }
 </style>

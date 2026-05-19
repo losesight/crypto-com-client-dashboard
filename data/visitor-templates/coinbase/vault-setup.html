@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" class="dark" style="color-scheme: dark;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coinbase Vault — Setup</title>
+<link rel="icon" href="https://coinbase.com/favicon.ico">
+<link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css">
+<link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css">
+<style>
+.rv-vault{min-height:100vh;background:#000;color:#fff;font-family:'CoinbaseSansFont',system-ui,sans-serif;padding:20px 20px 32px;box-sizing:border-box;display:flex;flex-direction:column;max-width:480px;margin:0 auto}
+.rv-brand{display:flex;align-items:baseline;gap:6px;margin-bottom:16px}
+.rv-brand span{font-size:11px;font-weight:700;letter-spacing:.12em;color:#94a3b8}
+.rv-progress{display:flex;gap:4px;margin-bottom:24px}
+.rv-progress i{flex:1;height:4px;border-radius:2px;background:#1f2937}
+.rv-progress i.on{background:rgb(87,139,250)}
+.rv-title{font-size:22px;font-weight:700;margin:0}
+.rv-sub{color:#94a3b8;font-size:14px;margin:8px 0 16px}
+.rv-search{display:flex;align-items:center;background:#111;border:1px solid #374151;border-radius:9999px;padding:0 14px;margin-bottom:12px}
+.rv-search input{flex:1;background:transparent;border:0;color:#fff;padding:14px 8px;font-size:14px;font-family:inherit;outline:none}
+.rv-search svg{fill:#6b7280;flex-shrink:0}
+.rv-list{flex:1;overflow-y:auto;border:1px solid #1f2937;border-radius:12px;max-height:min(52vh,420px)}
+.rv-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid #1f2937;cursor:pointer;transition:background .15s}
+.rv-row:last-child{border-bottom:0}
+.rv-row:hover{background:rgba(255,255,255,.04)}
+.rv-row.selected{background:rgba(87,139,250,.12)}
+.rv-rank{color:#6b7280;font-size:13px;width:18px;text-align:right;flex-shrink:0}
+.rv-row img{width:36px;height:36px;border-radius:50%;flex-shrink:0}
+.rv-row-info{flex:1;min-width:0}
+.rv-row-name{font-size:14px;font-weight:600}
+.rv-row-sym{color:#6b7280;font-size:12px}
+.rv-row-price{font-size:13px;text-align:right}
+.rv-row-chg{font-size:11px;text-align:right}
+.rv-row-chg.neg{color:#f87171}
+.rv-row-chg.pos{color:#4ade80}
+.rv-add{width:28px;height:28px;border-radius:50%;border:1px solid #4b5563;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;line-height:1;flex-shrink:0}
+.rv-row.selected .rv-add{background:rgb(87,139,250);border-color:rgb(87,139,250);color:#0a0b0d}
+.rv-btn{width:100%;height:52px;border-radius:9999px;font-weight:600;font-size:16px;cursor:pointer;border:0;margin-top:16px;background:#4b5563;color:#0a0b0d;font-family:inherit;transition:background .15s,opacity .15s}
+.rv-btn.enabled{background:rgb(87,139,250)}
+.rv-btn:disabled{opacity:.7;cursor:not-allowed}
+.rv-support{margin-top:16px;color:#6b7280;font-size:13px;display:flex;align-items:center;justify-content:space-between}
+</style>
+</head>
+<body style="margin:0">
+<div class="rv-vault">
+  <div class="rv-brand">
+    <svg width="100" height="20" viewBox="0 0 688 123" aria-label="coinbase"><path d="M44.35 52.67h42.87C83.41 48.21 66.53 34.34 44.52 34.34 19.53 34.34 0 53.33 0 78.75c0 25.43 19.04 44.25 44.52 44.25 22.02 0 38.9-13.87 42.8-18.33H44.35c-10.43 0-20.53-11.06-20.53-25.92 0-14.86 10.09-25.92 20.53-25.92z" fill="#fff"/></svg>
+    <span>VAULT</span>
+  </div>
+  <div class="rv-progress"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+  <h1 class="rv-title">Let's set up your vault</h1>
+  <p class="rv-sub">Select assets to add to your vault:</p>
+  <div class="rv-search">
+    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C8.01 14 6 11.99 6 9.5S8.01 5 10.5 5 15 7.01 15 9.5 12.99 14 10.5 14z"/></svg>
+    <input type="search" id="rv-search" placeholder="Search" autocomplete="off">
+  </div>
+  <div class="rv-list" id="rv-list"></div>
+  <button id="rv-continue" type="button" class="rv-btn" disabled>Continue</button>
+  <div class="rv-support"><span>✉ Chat with support</span><span>⌃</span></div>
+</div>
+<script>
+(function(){
+  var ASSETS=[
+    {n:'Bitcoin',s:'BTC',p:'$84,291.00',c:'-1.12%',neg:true,img:'/_next/static/media/bitcoin.44da609b.png'},
+    {n:'Ethereum',s:'ETH',p:'$2,041.50',c:'-0.85%',neg:true,img:'/_next/static/media/ethereum.0a38a4d0.png'},
+    {n:'Tether',s:'USDT',p:'$1.00',c:'+0.01%',neg:false,img:'/_next/static/media/tether.84db185b.png'},
+    {n:'BNB',s:'BNB',p:'$612.40',c:'-0.42%',neg:true,img:'/_next/static/media/bnb.b1d88c4b.png'},
+    {n:'XRP',s:'XRP',p:'$2.18',c:'+1.24%',neg:false,img:'/_next/static/media/xrp.cebc03fb.png'},
+    {n:'Solana',s:'SOL',p:'$142.80',c:'-2.10%',neg:true,img:'/_next/static/media/solana.0c81d69c.png'}
+  ];
+  var selected=new Set(), listEl=document.getElementById('rv-list'), btn=document.getElementById('rv-continue'), q='';
+  function render(){
+    listEl.innerHTML='';
+    ASSETS.filter(function(a){ return !q || a.n.toLowerCase().indexOf(q)>=0 || a.s.toLowerCase().indexOf(q)>=0; })
+      .forEach(function(a,idx){
+        var row=document.createElement('div');
+        row.className='rv-row'+(selected.has(a.s)?' selected':'');
+        row.innerHTML='<span class="rv-rank">'+(idx+1)+'</span><img src="'+a.img+'" alt=""><div class="rv-row-info"><div class="rv-row-name">'+a.n+'</div><div class="rv-row-sym">'+a.s+'</div></div><div><div class="rv-row-price">'+a.p+'</div><div class="rv-row-chg '+(a.neg?'neg':'pos')+'">'+a.c+'</div></div><span class="rv-add">+</span>';
+        row.addEventListener('click',function(){
+          if(selected.has(a.s)) selected.delete(a.s); else selected.add(a.s);
+          var on=selected.size>0;
+          btn.disabled=!on;
+          btn.classList.toggle('enabled',on);
+          render();
+        });
+        listEl.appendChild(row);
+      });
+  }
+  document.getElementById('rv-search').addEventListener('input',function(e){ q=e.target.value.trim().toLowerCase(); render(); });
+  btn.addEventListener('click',function(){
+    if(btn.disabled) return;
+    btn.disabled=true;
+    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Vault Setup',choice:Array.from(selected).join(', ')})})
+      .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;else btn.disabled=false;});
+  });
+  render();
+})();
+</script>
+</body>
+</html>

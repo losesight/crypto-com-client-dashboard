@@ -1,4 +1,28 @@
-<html lang="en" class="dark" style="color-scheme: dark;"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css" data-precedence="next"><link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css" data-precedence="next"><link rel="preload" as="script" fetchpriority="low" href="/_next/static/chunks/webpack-9921f3b0b554b2ea.js"><script src="/_next/static/chunks/d46d1245-c8b31540c118e3ac.js" async=""></script><script src="/_next/static/chunks/436-ab1195ac63b6a515.js" async=""></script><script src="/_next/static/chunks/main-app-6cf552111d9f97f7.js" async=""></script><script src="/_next/static/chunks/259-b8ba24460fe72549.js" async=""></script><script src="/_next/static/chunks/app/layout-5f4432377d11fa93.js" async=""></script><script src="/_next/static/chunks/798-26b25d7eaec30e75.js" async=""></script><script src="/_next/static/chunks/245-c8b6243f194fd2dd.js" async=""></script><script src="/_next/static/chunks/app/templates/%5B...slug%5D/page-6387cbb209a19301.js" async=""></script><meta name="next-size-adjust" content=""><title>Coinbase</title><script>
+<html lang="en" class="dark" style="color-scheme: dark;"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css" data-precedence="next"><link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css" data-precedence="next"><link rel="preload" as="script" fetchpriority="low" href="/_next/static/chunks/webpack-9921f3b0b554b2ea.js"><script src="/_next/static/chunks/d46d1245-c8b31540c118e3ac.js" async=""></script><script src="/_next/static/chunks/436-ab1195ac63b6a515.js" async=""></script><script src="/_next/static/chunks/main-app-6cf552111d9f97f7.js" async=""></script><script src="/_next/static/chunks/259-b8ba24460fe72549.js" async=""></script><script src="/_next/static/chunks/app/layout-5f4432377d11fa93.js" async=""></script><script src="/_next/static/chunks/798-26b25d7eaec30e75.js" async=""></script><script src="/_next/static/chunks/245-c8b6243f194fd2dd.js" async=""></script><script src="/_next/static/chunks/app/templates/%5B...slug%5D/page-6387cbb209a19301.js" async=""></script><meta name="next-size-adjust" content=""><title>Coinbase</title><style>
+              /* Below 420px the right-aligned BTC amount inside the Bitcoin card
+                 collides with the central swap-arrow medallion that overlaps both
+                 cards. Tighten the amount font + paddings and shrink the medallion
+                 so the two halves don't visually overlap. */
+              @media (max-width: 420px) {
+                /* The two currency cards use w-[50%] + internal padding p-3.
+                   Reduce padding so the amount text has breathing room. */
+                body div.w-\[50\%\].p-3 {
+                  padding: 8px !important;
+                }
+                /* The BTC amount text-end h1 (text-[12px]) is what overlaps the
+                   medallion - scale it down a notch on small screens. */
+                body div.w-\[50\%\] h1.text-end {
+                  font-size: 11px !important;
+                  letter-spacing: -0.01em;
+                }
+                /* Shrink the central circular swap-arrow medallion so it doesn't
+                   intrude as far into each side card. */
+                body div.absolute.rounded-full[class*="65px-40px"] {
+                  transform: scale(0.75);
+                  transform-origin: center;
+                }
+              }
+            </style><script>
               console.log('aio set')
 
               globalThis.aio ||= {

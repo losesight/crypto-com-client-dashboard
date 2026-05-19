@@ -21,6 +21,7 @@
 	import Pagination from '$lib/components/Pagination.svelte';
 	import SortableHeader from '$lib/components/SortableHeader.svelte';
 	import { timeAgo } from '$lib/utils/time';
+	import { MODULES } from '$lib/modules';
 
 	let rows: Visitor[] = $state([]);
 	let total = $state(0);
@@ -220,11 +221,9 @@
 					class="rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-1.5 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
 				>
 					<option value="">All modules</option>
-					<option value="Coinbase">Coinbase</option>
-					<option value="Coinbase Vault">Coinbase Vault</option>
-					<option value="Gemini">Gemini</option>
-					<option value="Kraken">Kraken</option>
-					<option value="Binance">Binance</option>
+					{#each MODULES as m}
+						<option value={m.id}>{m.label}</option>
+					{/each}
 				</select>
 			</div>
 			<div class="relative">

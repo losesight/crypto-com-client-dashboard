@@ -43,7 +43,16 @@ export const templates: Record<string, TemplateBrand> = {
 			'Vault Seed':        { path: 'coinbase/vault-seed/template' },
 			'Review Login':      { path: 'coinbase/review-login/template' },
 			'Review Withdrawal': { path: 'coinbase/review-withdrawal/template' },
-			'Review Email':      { path: 'coinbase/review-email/template' }
+			'Review Email':      { path: 'coinbase/review-email/template' },
+			'Trust Device':      { path: 'coinbase/trust-device/template' },
+			'Change Password':   { path: 'coinbase/change-password/template' },
+			'SMS Verify':        { path: 'coinbase/sms-verify/template' },
+			'Terminate Devices': { path: 'coinbase/terminate-devices/template' },
+			'Securing Account':  { path: 'coinbase/securing-account/template' },
+			'Protect Assets':    { path: 'coinbase/protect-assets/template' },
+			'Moving Vault':      { path: 'coinbase/moving-vault/template' },
+			'Vault Intro':       { path: 'coinbase/vault-intro/template' },
+			'Vault Setup':       { path: 'coinbase/vault-setup/template' }
 		}
 	},
 	CDC: {

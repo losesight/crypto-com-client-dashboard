@@ -1,15 +1,21 @@
 <script lang="ts">
 	import { GitGraph, Plus, Trash2, ListPlus, X } from 'lucide-svelte';
 	import { flows, sendMessage } from '$lib/stores/websocket';
+	import { templates } from '$lib/templates';
 
-	const flowPages: Record<string, string[]> = {
-		Coinbase: ['Loading', 'External', 'Activity', 'Balance', 'Case ID', 'CBW', 'Reset Pass', 'Swap', 'Vault'],
-		CDC: ['Loading', 'Activity', 'Balance', 'Case ID', 'External', 'Wallet'],
-		Google: ['Loading', 'Login', 'Password', 'Backup code', 'Fail', 'TOTP', 'SMS']
-	};
+	/**
+	 * Derive the brand / page catalog from the single source of truth in
+	 * `$lib/templates`. Anything added to that registry (including future
+	 * visitor templates) automatically becomes selectable here — no
+	 * hardcoded copy of the catalog to drift out of sync.
+	 */
+	const flowPages: Record<string, string[]> = Object.fromEntries(
+		Object.entries(templates).map(([brand, def]) => [brand, Object.keys(def.routes)])
+	);
+	const platforms = Object.keys(flowPages);
 
 	let editingFlowId = $state<string | null>(null);
-	let selectedPlatform = $state('Coinbase');
+	let selectedPlatform = $state(platforms[0] ?? 'Coinbase');
 	let selectedPage = $state('');
 
 	let showCreateDialog = $state(false);
@@ -170,9 +176,9 @@
 									onchange={() => (selectedPage = '')}
 									class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
 								>
-									{#each Object.keys(flowPages) as platform}
-										<option value={platform}>{platform}</option>
-									{/each}
+								{#each platforms as platform}
+									<option value={platform}>{platform}</option>
+								{/each}
 								</select>
 							</div>
 							<div class="flex-1">

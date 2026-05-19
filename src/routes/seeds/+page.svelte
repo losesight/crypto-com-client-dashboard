@@ -17,6 +17,7 @@
 	import SortableHeader from '$lib/components/SortableHeader.svelte';
 	import ConnectionBadge from '$lib/components/ConnectionBadge.svelte';
 	import { toast } from '$lib/stores/toast';
+	import { MODULES } from '$lib/modules';
 
 	interface Seed {
 		id: string;
@@ -206,12 +207,9 @@
 				</div>
 				<select bind:value={moduleFilter} class="rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
 					<option value="">All Modules</option>
-					<option value="coinbase">Coinbase</option>
-					<option value="vault">Coinbase Vault</option>
-					<option value="crypto">Crypto.com</option>
-					<option value="gemini">Gemini</option>
-					<option value="kraken">Kraken</option>
-					<option value="binance">Binance</option>
+					{#each MODULES as m}
+						<option value={m.seedToken}>{m.label}</option>
+					{/each}
 				</select>
 				<select bind:value={status} class="rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
 					<option value="">All Status</option>

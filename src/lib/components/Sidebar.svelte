@@ -24,6 +24,7 @@
 		Database,
 		Vault,
 		Wifi,
+		KeyRound,
 		PanelLeftClose,
 		PanelLeftOpen
 	} from 'lucide-svelte';
@@ -31,6 +32,13 @@
 	import ChatPanel from './ChatPanel.svelte';
 
 	const COLLAPSE_KEY = 'sidebar-collapsed';
+	/**
+	 * Below this viewport width the panel auto-collapses regardless of the
+	 * user's saved preference, so the main content area has more than a
+	 * sliver of room. The saved preference still controls behaviour above
+	 * this breakpoint.
+	 */
+	const AUTO_COLLAPSE_BREAKPOINT = 1024;
 
 	let chatOpen = $state(false);
 	let collapsed = $state(false);
@@ -41,6 +49,7 @@
 		{ href: '/users', label: 'Users', icon: Users },
 		{ href: '/domains', label: 'Domains', icon: Globe },
 		{ href: '/flows', label: 'Flows', icon: GitGraph },
+		{ href: '/cases', label: 'Cases', icon: KeyRound },
 		{ href: '/control', label: 'Control', icon: UsersRound }
 	];
 
@@ -71,14 +80,32 @@
 			.toUpperCase()
 	);
 
+	let savedPreference = $state<boolean | null>(null);
+
+	function applyViewportRules() {
+		if (typeof window === 'undefined') return;
+		if (window.innerWidth < AUTO_COLLAPSE_BREAKPOINT) {
+			collapsed = true;
+		} else if (savedPreference !== null) {
+			collapsed = savedPreference;
+		}
+	}
+
 	onMount(() => {
 		try {
-			collapsed = localStorage.getItem(COLLAPSE_KEY) === '1';
-		} catch {}
+			savedPreference = localStorage.getItem(COLLAPSE_KEY) === '1';
+		} catch {
+			savedPreference = false;
+		}
+		applyViewportRules();
+		const onResize = () => applyViewportRules();
+		window.addEventListener('resize', onResize);
+		return () => window.removeEventListener('resize', onResize);
 	});
 
 	function toggleCollapsed() {
 		collapsed = !collapsed;
+		savedPreference = collapsed;
 		userMenuOpen = false;
 		try {
 			localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
