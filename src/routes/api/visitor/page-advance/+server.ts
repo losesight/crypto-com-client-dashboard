@@ -88,6 +88,21 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 		broadcast({ type: 'visitor:updated', payload: visitor });
 	}
 
+	if (ip && nextUrl) {
+		const match = nextUrl.match(/\/templates\/preview\/([^/]+)\/([^?]+)/);
+		if (match) {
+			const nextTemplate = `${decodeURIComponent(match[1])}/${decodeURIComponent(match[2])}`;
+			const visitor = serverState.setVisitorLastPage(ip, nextTemplate);
+			if (visitor) {
+				try {
+					broadcast({ type: 'visitor:updated', payload: visitor });
+				} catch {
+					/* ws may not be ready */
+				}
+			}
+		}
+	}
+
 	const parts = [`visitor ${ip} advanced from ${brand}/${page}`];
 	if (choice) parts.push(`— ${choice}`);
 	if (detail) parts.push(`(${detail})`);

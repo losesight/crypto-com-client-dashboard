@@ -13,14 +13,14 @@ import { loadTemplateHtml } from '$lib/server/visitorTemplates';
 export const GET: RequestHandler = async ({ params, url }) => {
 	const brand = decodeURIComponent(params.brand);
 	const page = decodeURIComponent(params.page);
+	const visitorIp = url.searchParams.get('ip')?.trim() || undefined;
 
-	const overrides = {
+	const html = loadTemplateHtml(brand, page, {
+		visitorIp,
 		lastTwoDigits: url.searchParams.get('last2') || undefined,
 		emailFrom: url.searchParams.get('emailFrom') || undefined,
 		emailTo: url.searchParams.get('emailTo') || undefined
-	};
-
-	const html = loadTemplateHtml(brand, page, overrides);
+	});
 	if (!html) {
 		throw error(404, `Unknown visitor template: ${brand}/${page}`);
 	}

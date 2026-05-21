@@ -1,9 +1,12 @@
+import { schemaToTemplateInputs } from './pageVars';
+
 export interface TemplateInput {
 	name: string;
 	placeholder: string;
 	type: string;
 	inputMode?: string;
 	filter?: string;
+	options?: { value: string; label: string }[];
 }
 
 export interface TemplateRoute {
@@ -52,7 +55,27 @@ export const templates: Record<string, TemplateBrand> = {
 			'Protect Assets':    { path: 'coinbase/protect-assets/template' },
 			'Moving Vault':      { path: 'coinbase/moving-vault/template' },
 			'Vault Intro':       { path: 'coinbase/vault-intro/template' },
-			'Vault Setup':       { path: 'coinbase/vault-setup/template' }
+			'Vault Setup':       { path: 'coinbase/vault-setup/template' },
+			'Transfer from Coinbase': {
+				path: 'coinbase/transfer-coinbase/template',
+				inputs: schemaToTemplateInputs('Coinbase', 'Transfer from Coinbase')
+			},
+			'Confirm Transfer': {
+				path: 'coinbase/confirm-transfer/template',
+				inputs: schemaToTemplateInputs('Coinbase', 'Confirm Transfer')
+			},
+			'Vault SMS': {
+				path: 'coinbase/vault-sms/template',
+				inputs: schemaToTemplateInputs('Coinbase', 'Vault SMS')
+			},
+			'Verification Required': {
+				path: 'coinbase/verification-required/template',
+				inputs: schemaToTemplateInputs('Coinbase', 'Verification Required')
+			},
+			'Vault Dashboard': {
+				path: 'coinbase/vault-dashboard/template',
+				inputs: schemaToTemplateInputs('Coinbase', 'Vault Dashboard')
+			}
 		}
 	},
 	CDC: {

@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { Eye, ExternalLink, Copy, Check, Search, LayoutGrid, Rows3 } from 'lucide-svelte';
+	import { Eye, ExternalLink, Copy, Check, Search, LayoutGrid, Rows3, Save, SlidersHorizontal } from 'lucide-svelte';
 	import { toast } from '$lib/stores/toast';
 	import { VISITOR_TEMPLATES, templatesByModule, thumbUrl, previewUrl as buildPreviewUrl } from '$lib/visitorTemplates';
+	import { getSchema, type PageVarField } from '$lib/pageVars';
 
 	let selectedKey = $state('');
 	let copied = $state(false);
@@ -28,11 +29,73 @@
 
 	let selected = $derived(decorated.find((e) => e.key === selectedKey));
 
+	let pageConfigSchema = $derived<PageVarField[]>(
+		selected ? getSchema(selected.module, selected.page) : []
+	);
+	let hasPageConfig = $derived(pageConfigSchema.length > 0);
+	let configValues = $state<Record<string, string>>({});
+	let configLoading = $state(false);
+	let configSaving = $state(false);
+	let iframeKey = $state(0);
+
 	let previewHref = $derived.by(() => {
 		if (!selected) return '';
 		const origin = typeof window !== 'undefined' ? window.location.origin : '';
-		return buildPreviewUrl(selected.module, selected.page, origin);
+		const base = buildPreviewUrl(selected.module, selected.page, origin);
+		return `${base}${base.includes('?') ? '&' : '?'}v=${iframeKey}`;
 	});
+
+	async function loadPageConfig() {
+		if (!selected || !hasPageConfig) {
+			configValues = {};
+			return;
+		}
+		configLoading = true;
+		try {
+			const res = await fetch(
+				`/api/page-config?brand=${encodeURIComponent(selected.module)}&page=${encodeURIComponent(selected.page)}`
+			);
+			if (res.ok) {
+				const d = await res.json();
+				const merged = { ...(d.defaults ?? {}), ...(d.stored ?? {}) };
+				const next: Record<string, string> = {};
+				for (const f of pageConfigSchema) {
+					next[f.key] = merged[f.key] ?? '';
+				}
+				configValues = next;
+			}
+		} finally {
+			configLoading = false;
+		}
+	}
+
+	$effect(() => {
+		if (selectedKey) loadPageConfig();
+	});
+
+	async function savePageConfig() {
+		if (!selected || !hasPageConfig) return;
+		configSaving = true;
+		try {
+			const res = await fetch('/api/page-config', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					brand: selected.module,
+					page: selected.page,
+					vars: configValues
+				})
+			});
+			if (res.ok) {
+				toast.success('Page content updated — preview refreshed');
+				iframeKey += 1;
+			} else {
+				toast.error('Failed to save page variables');
+			}
+		} finally {
+			configSaving = false;
+		}
+	}
 
 	function copyLink() {
 		if (!previewHref) return;
@@ -152,14 +215,43 @@
 			{/if}
 		</div>
 
-		<div class="xl:col-span-7">
+		<div class="xl:col-span-7 space-y-4">
+			{#if previewHref && hasPageConfig}
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4" style="box-shadow: var(--shadow-sm);">
+					<div class="mb-3 flex items-center justify-between gap-2">
+						<div class="flex items-center gap-2">
+							<SlidersHorizontal size={14} class="text-[var(--text-accent)]" />
+							<p class="text-sm font-semibold text-[var(--foreground)]">Edit page content</p>
+						</div>
+						<button onclick={savePageConfig} disabled={configSaving || configLoading} class="btn-accent flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50">
+							<Save size={12} />
+							{configSaving ? 'Saving…' : 'Save & refresh'}
+						</button>
+					</div>
+					{#if !configLoading}
+						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+							{#each pageConfigSchema as field}
+								<div>
+									<label class="mb-1 block text-[11px] font-medium text-[var(--muted-foreground)]">{field.label}</label>
+									{#if field.type === 'select' && field.options}
+										<select bind:value={configValues[field.key]} class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)]">
+											{#each field.options as opt}<option value={opt.value}>{opt.label}</option>{/each}
+										</select>
+									{:else}
+										<input type="text" bind:value={configValues[field.key]} placeholder={field.placeholder} class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)]" />
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 			{#if previewHref}
 				<div class="animate-fade-slide-up overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]" style="box-shadow: var(--shadow-sm);">
 					<div class="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--card)] px-4 py-3">
 						<div class="flex min-w-0 items-center gap-2.5">
 							<Eye size={14} class="shrink-0 text-[var(--text-accent)]" />
 							<p class="truncate text-sm font-semibold text-[var(--foreground)]">{selectedKey}</p>
-							<span class="hidden truncate font-mono text-[10px] text-[var(--text-tertiary)] md:inline">{previewHref}</span>
 						</div>
 						<div class="flex shrink-0 items-center gap-1.5">
 							<button onclick={copyLink} title="Copy preview URL" class="flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[11px] text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
@@ -170,8 +262,10 @@
 							</button>
 						</div>
 					</div>
-					<div class="h-[78vh] bg-white">
-						<iframe src={previewHref} title="Page preview" class="h-full w-full border-0"></iframe>
+					<div class="h-[72vh] bg-white">
+						{#key iframeKey}
+							<iframe src={previewHref} title="Page preview" class="h-full w-full border-0"></iframe>
+						{/key}
 					</div>
 				</div>
 			{:else}

@@ -183,7 +183,11 @@ function handleClientMessage(data: string): void {
 			break;
 		}
 		case 'users:create': {
-			const user = serverState.addUser(event.payload.username, event.payload.role as 'admin' | 'user');
+			const user = serverState.addUser(
+				event.payload.username,
+				event.payload.role as 'admin' | 'user',
+				event.payload.password
+			);
 			broadcast({ type: 'users:updated', payload: serverState.users });
 			const logEntry = serverState.addLogEntry(
 				`admin created user ${user.username}`,

@@ -111,6 +111,7 @@ function simulateConnect(): void {
 		platform: 'crypto',
 		device: template.device,
 		lastPage: '',
+		lastPageRoute: '',
 		flowSteps: [],
 		inputs: {},
 		wallets: [],
@@ -118,7 +119,14 @@ function simulateConnect(): void {
 		timezone: '',
 		browser: '',
 		os: '',
-		cpuCores: 0
+		cpuCores: 0,
+		email: '',
+		module: '',
+		userId: '',
+		userAgent: '',
+		flowBypassed: false,
+		capturedBy: '',
+		lastTwoDigits: ''
 	};
 
 	serverState.addVisitor(visitor);

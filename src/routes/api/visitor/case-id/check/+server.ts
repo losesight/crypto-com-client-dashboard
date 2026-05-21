@@ -116,6 +116,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 		return json({ ok: true, valid: false, error: 'expired' });
 	}
 
+	if (record.module && brand && record.module !== brand) {
+		return json({ ok: true, valid: false });
+	}
+
 	dbRecordCaseCodeUse(raw, ip);
 
 	const visitor = serverState.visitors.get(ip);

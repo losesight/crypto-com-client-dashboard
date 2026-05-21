@@ -1565,6 +1565,23 @@ export function dbUpdateLastLogin(id: number): void {
 		.run(new Date().toISOString(), id);
 }
 
+export function dbUpdateUserProfile(
+	userId: number,
+	patch: { username?: string; password?: string }
+): void {
+	const db = getDb();
+	if (patch.username) {
+		db.prepare('UPDATE user_accounts SET username = ? WHERE id = ?').run(patch.username, userId);
+		db.prepare('UPDATE sessions SET username = ? WHERE user_id = ?').run(patch.username, userId);
+	}
+	if (patch.password) {
+		db.prepare('UPDATE user_accounts SET password_hash = ? WHERE id = ?').run(
+			hashPassword(patch.password),
+			userId
+		);
+	}
+}
+
 export function dbCreateSession(token: string, userId: number, username: string, role: string, ttlMs: number): void {
 	const now = Date.now();
 	getDb()
@@ -1708,10 +1725,18 @@ export function dbGetUsers(): UserAccount[] {
 	}));
 }
 
-export function dbInsertUser(username: string, role: string): number {
+export function dbInsertUser(username: string, role: string, password?: string): number {
+	const created = new Date().toLocaleDateString('en-US', {
+		month: 'short',
+		day: 'numeric',
+		year: 'numeric'
+	});
+	const hash = password?.trim() ? hashPassword(password.trim()) : '';
 	const result = getDb()
-		.prepare('INSERT INTO user_accounts (username, role, created_at, active) VALUES (?, ?, ?, 1)')
-		.run(username, role, new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+		.prepare(
+			'INSERT INTO user_accounts (username, password_hash, role, created_at, active) VALUES (?, ?, ?, ?, 1)'
+		)
+		.run(username, hash, role, created);
 	return Number(result.lastInsertRowid);
 }
 

@@ -21,7 +21,10 @@ import {
 	dbUpdateHost as dbUpdateHostRow,
 	dbDeactivateHost,
 	dbGetDomains,
-	dbSeedDefaultTemplates
+	dbSeedDefaultTemplates,
+	dbGetUsers,
+	dbInsertUser,
+	dbDeleteUser
 } from './database.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -275,7 +278,7 @@ export type ClientEvent =
 	| { type: 'mailer:send'; payload: { templateId: string; recipients: string[]; subject?: string; html?: string; senderEmail?: string; senderName?: string; replyTo?: string; smtpId?: string; fullAccess?: boolean; sendMode?: 'smtp' | 'mail-server' } }
 	| { type: 'mailer:smtp:add'; payload: { id?: string; host: string; port: number; user: string; password: string; useSSL?: boolean; spoofable?: boolean } }
 	| { type: 'mailer:smtp:remove'; payload: { id: string } }
-	| { type: 'users:create'; payload: { username: string; role: string } }
+	| { type: 'users:create'; payload: { username: string; role: string; password?: string } }
 	| { type: 'users:delete'; payload: { id: string } }
 	| { type: 'users:list'; payload: Record<string, never> }
 	| { type: 'domains:add'; payload: { domain: string } }
@@ -449,6 +452,9 @@ export class ServerState {
 
 			// Load domains
 			this.domains = dbGetDomains();
+
+			// Load user accounts
+			this.users = dbGetUsers();
 
 			// Seed templates if missing (reads HTML files from disk)
 			try {
@@ -674,9 +680,10 @@ export class ServerState {
 		}
 	}
 
-	addUser(username: string, role: 'admin' | 'user'): UserAccount {
+	addUser(username: string, role: 'admin' | 'user', password?: string): UserAccount {
+		const id = dbInsertUser(username, role, password);
 		const user: UserAccount = {
-			id: String(Date.now()),
+			id: String(id),
 			username,
 			role,
 			createdAt: formatDate(new Date()),
@@ -688,6 +695,11 @@ export class ServerState {
 	}
 
 	deleteUser(id: string): void {
+		try {
+			dbDeleteUser(id);
+		} catch {
+			/* non-critical */
+		}
 		this.users = this.users.filter((u) => u.id !== id);
 	}
 

