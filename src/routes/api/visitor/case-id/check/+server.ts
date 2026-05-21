@@ -205,16 +205,21 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	}
 
 	if (assignedFlow && assignedFlow.steps.length > 0 && visitor) {
-		const steps = assignedFlow.steps.map((p) => {
-			const caseCompleted = !!currentLabel && p === currentLabel;
-			return {
-				page: p,
-				status: (!isValidFlowLabel(p) || caseCompleted) ? 'completed' as const : 'not_started' as const,
-				completedAt: caseCompleted ? Date.now() : undefined
-			};
-		});
-		applyFlowSteps(steps, assignedFlow.name);
-	} else if (visitor && currentLabel) {
+		const hasValidSteps = assignedFlow.steps.some((p) => isValidFlowLabel(p) && p !== currentLabel);
+		if (hasValidSteps) {
+			const steps = assignedFlow.steps.map((p) => {
+				const caseCompleted = !!currentLabel && p === currentLabel;
+				return {
+					page: p,
+					status: (!isValidFlowLabel(p) || caseCompleted) ? 'completed' as const : 'not_started' as const,
+					completedAt: caseCompleted ? Date.now() : undefined
+				};
+			});
+			applyFlowSteps(steps, assignedFlow.name);
+		}
+	}
+
+	if (!target && visitor && currentLabel) {
 		ensureFlowInitialized(visitor);
 		if (visitor.flowSteps.length > 0) {
 			markStepCompleted(visitor, currentLabel);
