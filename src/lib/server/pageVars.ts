@@ -6,6 +6,7 @@ import {
 	getSchema,
 	type PageVarField
 } from '$lib/pageVars.js';
+import { buildLiveDateVars } from '$lib/dateVars.js';
 import { serverState } from './state.js';
 
 export function getStoredPageVars(brand: string, page: string): Record<string, string> {
@@ -29,6 +30,7 @@ export function resolvePageVars(
 	visitorInputs?: Record<string, string>
 ): Record<string, string> {
 	const merged = {
+		...buildLiveDateVars(),
 		...getDefaults(brand, page),
 		...getStoredPageVars(brand, page),
 		...(visitorInputs ?? {})

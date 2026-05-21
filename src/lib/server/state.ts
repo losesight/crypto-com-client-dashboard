@@ -56,7 +56,8 @@ const SEED_TEMPLATES: Array<Omit<SeedTemplate, 'html'> & { file: string }> = [
 			'{{CASE_ID}}',
 			'{{REPRESENTATIVE_NAME}}',
 			'{{CALLBACK_DATE}}',
-			'{{CALLBACK_TIME}}'
+			'{{CALLBACK_TIME}}',
+			'{{CURRENT_YEAR}}'
 		],
 		by: 'admin',
 		file: 'coinbase-callback.html'
@@ -65,7 +66,7 @@ const SEED_TEMPLATES: Array<Omit<SeedTemplate, 'html'> & { file: string }> = [
 		id: 'Coinbase_Vault',
 		name: 'Coinbase Vault',
 		subject: 'Coinbase Vault Created',
-		variables: ['{{DATE}}', '{{case_id}}', '{{UNSUBSCRIBE_URL}}'],
+		variables: ['{{DATE}}', '{{CURRENT_YEAR}}', '{{case_id}}', '{{UNSUBSCRIBE_URL}}'],
 		by: 'admin',
 		file: 'coinbase-vault.html'
 	},
@@ -73,7 +74,7 @@ const SEED_TEMPLATES: Array<Omit<SeedTemplate, 'html'> & { file: string }> = [
 		id: 'Coinbase_Review',
 		name: 'Coinbase Review',
 		subject: 'Review Account Activity',
-		variables: ['{{DATE}}', '{{ticket_number}}', '{{secure_portal_url}}', '{{UNSUBSCRIBE_URL}}'],
+		variables: ['{{DATE}}', '{{CURRENT_YEAR}}', '{{ticket_number}}', '{{secure_portal_url}}', '{{UNSUBSCRIBE_URL}}'],
 		by: 'admin',
 		file: 'coinbase-review.html'
 	},
@@ -81,7 +82,7 @@ const SEED_TEMPLATES: Array<Omit<SeedTemplate, 'html'> & { file: string }> = [
 		id: 'Coinbase_Employee',
 		name: 'Coinbase Employee',
 		subject: 'Verify Your Representative',
-		variables: ['{{DATE}}', '{{ticket_id}}', '{{EmployeeName}}', '{{Phone}}', '{{UNSUBSCRIBE_URL}}'],
+		variables: ['{{DATE}}', '{{CURRENT_YEAR}}', '{{ticket_id}}', '{{EmployeeName}}', '{{Phone}}', '{{UNSUBSCRIBE_URL}}'],
 		by: 'admin',
 		file: 'coinbase-employee.html'
 	}
@@ -213,7 +214,9 @@ export type ServerEvent =
 	| { type: 'livechat:typing'; payload: { conversationId: string; visitorIp: string; sender: 'visitor' | 'operator' } }
 	| { type: 'vault:updated'; payload: any }
 	| { type: 'admin:link'; payload: { on: boolean; domain: string; auth: string } }
-	| { type: 'mailer:result'; payload: { sent: number; failed: number; total: number; errors: string[] } };
+	| { type: 'mailer:result'; payload: { sent: number; failed: number; total: number; errors: string[] } }
+	| { type: 'mailer:smtp:sync'; payload: { servers: import('./mailer.js').SmtpConfigPublic[] } }
+	| { type: 'mailer:senders:sync'; payload: { senders: import('./database.js').DbMailerSenderIdentity[] } };
 
 export interface UserAccount {
 	id: string;
@@ -276,7 +279,7 @@ export type ClientEvent =
 	| { type: 'flow:update'; payload: Flow }
 	| { type: 'flow:delete'; payload: { id: string } }
 	| { type: 'mailer:send'; payload: { templateId: string; recipients: string[]; subject?: string; html?: string; senderEmail?: string; senderName?: string; replyTo?: string; smtpId?: string; fullAccess?: boolean; sendMode?: 'smtp' | 'mail-server' } }
-	| { type: 'mailer:smtp:add'; payload: { id?: string; host: string; port: number; user: string; password: string; useSSL?: boolean; spoofable?: boolean } }
+	| { type: 'mailer:smtp:add'; payload: { id?: string; label?: string; host: string; port: number; user: string; password: string; useSSL?: boolean; spoofable?: boolean } }
 	| { type: 'mailer:smtp:remove'; payload: { id: string } }
 	| { type: 'users:create'; payload: { username: string; role: string; password?: string } }
 	| { type: 'users:delete'; payload: { id: string } }

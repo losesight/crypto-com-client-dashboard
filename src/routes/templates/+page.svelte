@@ -20,6 +20,7 @@
 	} from 'lucide-svelte';
 	import { page } from '$app/stores';
 	import { toast } from '$lib/stores/toast';
+	import { applyLiveDatesToHtml } from '$lib/dateVars';
 
 	interface Template {
 		id: string;
@@ -48,6 +49,7 @@
 	let username = $derived($page.data.user?.username ?? '');
 
 	let selected = $derived(templates.find((t) => t.id === selectedId) ?? null);
+	let previewHtml = $derived(applyLiveDatesToHtml(draftHtml || selected?.html || ''));
 	let canEdit = $derived(
 		!!selected && (!selected.ownerUsername || selected.ownerUsername === username)
 	);
@@ -451,7 +453,7 @@
 					{:else}
 						<div class="h-full w-full {previewMode === 'mobile' ? 'flex items-center justify-center bg-zinc-100' : ''}">
 							<iframe
-								srcdoc={draftHtml || selected.html}
+								srcdoc={previewHtml}
 								title="Email preview"
 								class="border-0 {previewMode === 'mobile' ? 'h-[640px] w-[375px] shadow-xl' : 'h-full w-full'}"
 								sandbox="allow-same-origin"

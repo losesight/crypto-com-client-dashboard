@@ -187,6 +187,31 @@ function migrate(db: Database.Database): void {
 			created_at INTEGER NOT NULL DEFAULT 0
 		);
 
+		CREATE TABLE IF NOT EXISTS mailer_smtp_servers (
+			id TEXT PRIMARY KEY,
+			label TEXT NOT NULL DEFAULT '',
+			host TEXT NOT NULL,
+			port INTEGER NOT NULL DEFAULT 587,
+			username TEXT NOT NULL,
+			password TEXT NOT NULL DEFAULT '',
+			use_ssl INTEGER NOT NULL DEFAULT 0,
+			spoofable INTEGER NOT NULL DEFAULT 0,
+			created_by TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL DEFAULT 0
+		);
+
+		CREATE TABLE IF NOT EXISTS mailer_sender_identities (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			label TEXT NOT NULL DEFAULT '',
+			domain TEXT NOT NULL,
+			from_email TEXT NOT NULL,
+			from_name TEXT NOT NULL DEFAULT '',
+			smtp_id TEXT NOT NULL DEFAULT '',
+			notes TEXT NOT NULL DEFAULT '',
+			created_by TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL DEFAULT 0
+		);
+
 		CREATE TABLE IF NOT EXISTS livechat_conversations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			visitor_ip TEXT NOT NULL UNIQUE,
@@ -852,6 +877,145 @@ export function dbInsertMailerPreset(p: Omit<DbMailerPreset, 'id'>): DbMailerPre
 
 export function dbDeleteMailerPreset(id: string): void {
 	getDb().prepare('DELETE FROM mailer_presets WHERE id = ?').run(Number(id));
+}
+
+// --- Mailer SMTP (shared across all panel users) ---
+
+export interface DbMailerSmtpServer {
+	id: string;
+	label: string;
+	host: string;
+	port: number;
+	username: string;
+	password: string;
+	useSSL: boolean;
+	spoofable: boolean;
+	createdBy: string;
+	createdAt: number;
+}
+
+function rowToMailerSmtp(row: Record<string, unknown>): DbMailerSmtpServer {
+	return {
+		id: String(row.id),
+		label: String(row.label || ''),
+		host: String(row.host || ''),
+		port: Number(row.port) || 587,
+		username: String(row.username || ''),
+		password: String(row.password || ''),
+		useSSL: !!row.use_ssl,
+		spoofable: !!row.spoofable,
+		createdBy: String(row.created_by || ''),
+		createdAt: Number(row.created_at) || 0
+	};
+}
+
+export function dbGetMailerSmtpServers(): DbMailerSmtpServer[] {
+	const rows = getDb().prepare('SELECT * FROM mailer_smtp_servers ORDER BY created_at DESC').all() as Record<
+		string,
+		unknown
+	>[];
+	return rows.map(rowToMailerSmtp);
+}
+
+export function dbGetMailerSmtpServer(id: string): DbMailerSmtpServer | undefined {
+	const row = getDb().prepare('SELECT * FROM mailer_smtp_servers WHERE id = ?').get(id) as
+		| Record<string, unknown>
+		| undefined;
+	return row ? rowToMailerSmtp(row) : undefined;
+}
+
+export function dbUpsertMailerSmtpServer(server: DbMailerSmtpServer): DbMailerSmtpServer {
+	getDb()
+		.prepare(
+			`INSERT INTO mailer_smtp_servers (id, label, host, port, username, password, use_ssl, spoofable, created_by, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(id) DO UPDATE SET
+			   label = excluded.label,
+			   host = excluded.host,
+			   port = excluded.port,
+			   username = excluded.username,
+			   password = CASE WHEN excluded.password != '' THEN excluded.password ELSE mailer_smtp_servers.password END,
+			   use_ssl = excluded.use_ssl,
+			   spoofable = excluded.spoofable`
+		)
+		.run(
+			server.id,
+			server.label || '',
+			server.host,
+			server.port,
+			server.username,
+			server.password || '',
+			server.useSSL ? 1 : 0,
+			server.spoofable ? 1 : 0,
+			server.createdBy || '',
+			server.createdAt || Date.now()
+		);
+	return server;
+}
+
+export function dbDeleteMailerSmtpServer(id: string): void {
+	getDb().prepare('DELETE FROM mailer_smtp_servers WHERE id = ?').run(id);
+	getDb().prepare('UPDATE mailer_sender_identities SET smtp_id = "" WHERE smtp_id = ?').run(id);
+}
+
+// --- Mailer sender domains / from-addresses (shared) ---
+
+export interface DbMailerSenderIdentity {
+	id: string;
+	label: string;
+	domain: string;
+	fromEmail: string;
+	fromName: string;
+	smtpId: string;
+	notes: string;
+	createdBy: string;
+	createdAt: number;
+}
+
+function rowToMailerSender(row: Record<string, unknown>): DbMailerSenderIdentity {
+	return {
+		id: String(row.id),
+		label: String(row.label || ''),
+		domain: String(row.domain || ''),
+		fromEmail: String(row.from_email || ''),
+		fromName: String(row.from_name || ''),
+		smtpId: String(row.smtp_id || ''),
+		notes: String(row.notes || ''),
+		createdBy: String(row.created_by || ''),
+		createdAt: Number(row.created_at) || 0
+	};
+}
+
+export function dbGetMailerSenderIdentities(): DbMailerSenderIdentity[] {
+	const rows = getDb()
+		.prepare('SELECT * FROM mailer_sender_identities ORDER BY created_at DESC')
+		.all() as Record<string, unknown>[];
+	return rows.map(rowToMailerSender);
+}
+
+export function dbInsertMailerSenderIdentity(
+	p: Omit<DbMailerSenderIdentity, 'id'>
+): DbMailerSenderIdentity {
+	const result = getDb()
+		.prepare(
+			`INSERT INTO mailer_sender_identities (label, domain, from_email, from_name, smtp_id, notes, created_by, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			p.label || '',
+			p.domain,
+			p.fromEmail,
+			p.fromName || '',
+			p.smtpId || '',
+			p.notes || '',
+			p.createdBy || '',
+			p.createdAt || Date.now()
+		);
+	return { ...p, id: String(result.lastInsertRowid) };
+}
+
+export function dbDeleteMailerSenderIdentity(id: string): void {
+	getDb().prepare('DELETE FROM mailer_sender_identities WHERE id = ?').run(Number(id));
 }
 
 // --- Live Chat ---

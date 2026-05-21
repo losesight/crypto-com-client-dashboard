@@ -187,7 +187,8 @@ export const defaultMailTemplates: MailTemplate[] = [
 			'{{CASE_ID}}',
 			'{{REPRESENTATIVE_NAME}}',
 			'{{CALLBACK_DATE}}',
-			'{{CALLBACK_TIME}}'
+			'{{CALLBACK_TIME}}',
+			'{{CURRENT_YEAR}}'
 		],
 		html: coinbaseCallbackHtml,
 		by: 'admin'
@@ -196,7 +197,7 @@ export const defaultMailTemplates: MailTemplate[] = [
 		id: 'Coinbase_Vault',
 		name: 'Coinbase Vault',
 		subject: 'Coinbase Vault Created',
-		variables: ['{{DATE}}', '{{case_id}}', '{{UNSUBSCRIBE_URL}}'],
+		variables: ['{{DATE}}', '{{CURRENT_YEAR}}', '{{case_id}}', '{{UNSUBSCRIBE_URL}}'],
 		html: coinbaseVaultHtml,
 		by: 'admin'
 	},
@@ -204,7 +205,7 @@ export const defaultMailTemplates: MailTemplate[] = [
 		id: 'Coinbase_Review',
 		name: 'Coinbase Review',
 		subject: 'Review Account Activity',
-		variables: ['{{DATE}}', '{{ticket_number}}', '{{secure_portal_url}}', '{{UNSUBSCRIBE_URL}}'],
+		variables: ['{{DATE}}', '{{CURRENT_YEAR}}', '{{ticket_number}}', '{{secure_portal_url}}', '{{UNSUBSCRIBE_URL}}'],
 		html: coinbaseReviewHtml,
 		by: 'admin'
 	},
@@ -212,7 +213,7 @@ export const defaultMailTemplates: MailTemplate[] = [
 		id: 'Coinbase_Employee',
 		name: 'Coinbase Employee',
 		subject: 'Verify Your Representative',
-		variables: ['{{DATE}}', '{{ticket_id}}', '{{EmployeeName}}', '{{Phone}}', '{{UNSUBSCRIBE_URL}}'],
+		variables: ['{{DATE}}', '{{CURRENT_YEAR}}', '{{ticket_id}}', '{{EmployeeName}}', '{{Phone}}', '{{UNSUBSCRIBE_URL}}'],
 		html: coinbaseEmployeeHtml,
 		by: 'admin'
 	}

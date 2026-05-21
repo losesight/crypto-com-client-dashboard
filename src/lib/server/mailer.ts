@@ -1,48 +1,148 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-import { dbGetSettings, dbSetSetting } from './database.js';
+import {
+	dbDeleteMailerSmtpServer,
+	dbGetMailerSmtpServers,
+	dbGetSettings,
+	dbUpsertMailerSmtpServer,
+	type DbMailerSmtpServer
+} from './database.js';
 
 export interface SmtpConfig {
 	id: string;
+	label: string;
 	host: string;
 	port: number;
 	user: string;
 	password: string;
 	useSSL: boolean;
 	spoofable: boolean;
+	createdBy?: string;
+	createdAt?: number;
+}
+
+export interface SmtpConfigPublic {
+	id: string;
+	label: string;
+	host: string;
+	port: number;
+	user: string;
+	useSSL: boolean;
+	spoofable: boolean;
+	createdBy: string;
+	createdAt: number;
+	hasPassword: boolean;
 }
 
 const smtpConfigs: Map<string, SmtpConfig> = new Map();
 
-function persistSmtp(config: SmtpConfig): void {
-	dbSetSetting(`mailer.smtp.${config.id}`, JSON.stringify(config));
+function dbToConfig(row: DbMailerSmtpServer): SmtpConfig {
+	return {
+		id: row.id,
+		label: row.label,
+		host: row.host,
+		port: row.port,
+		user: row.username,
+		password: row.password,
+		useSSL: row.useSSL,
+		spoofable: row.spoofable,
+		createdBy: row.createdBy,
+		createdAt: row.createdAt
+	};
 }
 
-function unpersistSmtp(id: string): void {
-	dbSetSetting(`mailer.smtp.${id}`, '');
+function configToDb(config: SmtpConfig): DbMailerSmtpServer {
+	return {
+		id: config.id,
+		label: config.label || '',
+		host: config.host,
+		port: config.port,
+		username: config.user,
+		password: config.password,
+		useSSL: config.useSSL,
+		spoofable: config.spoofable,
+		createdBy: config.createdBy || '',
+		createdAt: config.createdAt || Date.now()
+	};
 }
 
-export function loadPersistedSmtpConfigs(): void {
-	const all = dbGetSettings('mailer.smtp.');
-	for (const [key, value] of Object.entries(all)) {
-		if (!value) continue;
-		try {
-			const config: SmtpConfig = JSON.parse(value);
-			if (config.id) smtpConfigs.set(config.id, config);
-		} catch {}
+export function toPublicSmtpConfig(config: SmtpConfig): SmtpConfigPublic {
+	return {
+		id: config.id,
+		label: config.label || config.host,
+		host: config.host,
+		port: config.port,
+		user: config.user,
+		useSSL: config.useSSL,
+		spoofable: config.spoofable,
+		createdBy: config.createdBy || '',
+		createdAt: config.createdAt || 0,
+		hasPassword: !!config.password
+	};
+}
+
+function syncMapFromDb(): void {
+	smtpConfigs.clear();
+	for (const row of dbGetMailerSmtpServers()) {
+		smtpConfigs.set(row.id, dbToConfig(row));
 	}
 }
 
-try { loadPersistedSmtpConfigs(); } catch {}
+/** One-time import from legacy settings keys (`mailer.smtp.*`). */
+function migrateLegacySettingsSmtp(): void {
+	if (smtpConfigs.size > 0) return;
+	const all = dbGetSettings('mailer.smtp.');
+	for (const [, value] of Object.entries(all)) {
+		if (!value) continue;
+		try {
+			const legacy = JSON.parse(value) as SmtpConfig;
+			if (!legacy?.id || !legacy.host) continue;
+			const config: SmtpConfig = {
+				id: legacy.id,
+				label: legacy.label || legacy.host,
+				host: legacy.host,
+				port: legacy.port || 587,
+				user: legacy.user,
+				password: legacy.password || '',
+				useSSL: !!legacy.useSSL,
+				spoofable: !!legacy.spoofable,
+				createdBy: legacy.createdBy || 'import',
+				createdAt: legacy.createdAt || Date.now()
+			};
+			dbUpsertMailerSmtpServer(configToDb(config));
+		} catch {
+			/* skip invalid */
+		}
+	}
+	syncMapFromDb();
+}
+
+export function loadPersistedSmtpConfigs(): void {
+	try {
+		syncMapFromDb();
+		migrateLegacySettingsSmtp();
+	} catch {
+		/* db may not be ready during tests */
+	}
+}
+
+try {
+	loadPersistedSmtpConfigs();
+} catch {}
 
 export function addSmtpConfig(config: SmtpConfig): void {
-	smtpConfigs.set(config.id, config);
-	persistSmtp(config);
+	const full: SmtpConfig = {
+		...config,
+		label: config.label || config.host,
+		createdAt: config.createdAt || Date.now()
+	};
+	smtpConfigs.set(full.id, full);
+	dbUpsertMailerSmtpServer(configToDb(full));
 }
 
 export function removeSmtpConfig(id: string): void {
 	smtpConfigs.delete(id);
-	unpersistSmtp(id);
+	dbDeleteMailerSmtpServer(id);
 }
 
 export function getSmtpConfig(id: string): SmtpConfig | undefined {
@@ -51,6 +151,10 @@ export function getSmtpConfig(id: string): SmtpConfig | undefined {
 
 export function getAllSmtpConfigs(): SmtpConfig[] {
 	return Array.from(smtpConfigs.values());
+}
+
+export function getAllPublicSmtpConfigs(): SmtpConfigPublic[] {
+	return getAllSmtpConfigs().map(toPublicSmtpConfig);
 }
 
 function createTransporter(config: SmtpConfig): Transporter {
@@ -93,7 +197,7 @@ export async function sendEmail(opts: {
 
 	const transporter = createTransporter(config);
 	const from = opts.fromEmail
-		? (opts.fromName ? `"${opts.fromName}" <${opts.fromEmail}>` : opts.fromEmail)
+		? opts.fromName ? `"${opts.fromName}" <${opts.fromEmail}>` : opts.fromEmail
 		: config.user;
 
 	try {
@@ -105,8 +209,9 @@ export async function sendEmail(opts: {
 		});
 
 		return { success: true, recipient: opts.to, messageId: info.messageId };
-	} catch (err: any) {
-		return { success: false, recipient: opts.to, error: err.message || 'Unknown error' };
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : 'Unknown error';
+		return { success: false, recipient: opts.to, error: message };
 	}
 }
 

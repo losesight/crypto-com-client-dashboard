@@ -1,3 +1,5 @@
+import { applyLiveDatesToHtml, mergeAutoDateVariables } from '$lib/dateVars.js';
+
 /** Patterns: {{var}}, [var], [[var]] */
 const VARIABLE_PATTERNS = [
 	/\{\{\s*([^{}]+?)\s*\}\}/g,
@@ -49,7 +51,8 @@ export function replaceTemplateVariables(
 	values: Record<string, string>
 ): string {
 	let result = html;
-	for (const [token, rawValue] of Object.entries(values)) {
+	const merged = mergeAutoDateVariables(values);
+	for (const [token, rawValue] of Object.entries(merged)) {
 		const value = rawValue ?? '';
 		const name = variableLabel(token);
 		if (!name) continue;
@@ -59,5 +62,5 @@ export function replaceTemplateVariables(
 		result = result.replaceAll(`[[${name}]]`, value);
 		result = result.replaceAll(`[${name}]`, value);
 	}
-	return result;
+	return applyLiveDatesToHtml(result);
 }

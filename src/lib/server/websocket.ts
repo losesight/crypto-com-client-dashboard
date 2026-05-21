@@ -3,7 +3,7 @@ import type { Server, IncomingMessage } from 'http';
 import type { Duplex } from 'stream';
 import { serverState, type ClientEvent, type ServerEvent } from './state.js';
 import { startSimulator } from './simulator.js';
-import { addSmtpConfig, removeSmtpConfig, sendCampaign } from './mailer.js';
+import { addSmtpConfig, getAllPublicSmtpConfigs, removeSmtpConfig, sendCampaign } from './mailer.js';
 import {
 	dbGetConversationByIp,
 	dbUpsertConversation,
@@ -159,18 +159,21 @@ function handleClientMessage(data: string): void {
 			const id = event.payload.id || String(Date.now());
 			addSmtpConfig({
 				id,
+				label: event.payload.label || event.payload.host,
 				host: event.payload.host,
 				port: event.payload.port,
 				user: event.payload.user,
 				password: event.payload.password,
 				useSSL: event.payload.useSSL ?? false,
-				spoofable: event.payload.spoofable ?? false
+				spoofable: event.payload.spoofable ?? false,
+				createdBy: 'panel'
 			});
 			const logEntry = serverState.addLogEntry(
 				`admin added SMTP server ${event.payload.host}`,
 				'action'
 			);
 			broadcast({ type: 'log:new', payload: logEntry });
+			broadcast({ type: 'mailer:smtp:sync', payload: { servers: getAllPublicSmtpConfigs() } });
 			break;
 		}
 		case 'mailer:smtp:remove': {
@@ -180,6 +183,7 @@ function handleClientMessage(data: string): void {
 				'action'
 			);
 			broadcast({ type: 'log:new', payload: logEntry });
+			broadcast({ type: 'mailer:smtp:sync', payload: { servers: getAllPublicSmtpConfigs() } });
 			break;
 		}
 		case 'users:create': {

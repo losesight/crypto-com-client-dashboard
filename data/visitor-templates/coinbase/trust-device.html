@@ -225,10 +225,6 @@
   browserOSEl.textContent = device.browserOS;
   if (confirmTitle) confirmTitle.textContent = 'This ' + device.label + ' is now trusted';
 
-  timeEl.textContent = new Date().toLocaleString('en-US', {
-    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-  });
-
   lookupLocation().then(function (loc) {
     ipEl.textContent       = loc.ip || 'Unknown';
     locationEl.textContent = formatLocation(loc);

@@ -16,6 +16,7 @@ import { findTemplate, VISITOR_TEMPLATES } from '$lib/visitorTemplates';
 import { SKIP_GENERIC_WIRING } from './funnel';
 import { dbGetSetting } from './database.js';
 import { getSchema } from '$lib/pageVars';
+import { applyLiveDatesToHtml } from '$lib/dateVars.js';
 
 export { findTemplate, VISITOR_TEMPLATES };
 export type { VisitorTemplate } from '$lib/visitorTemplates';
@@ -993,6 +994,39 @@ const LOADING_GATE_SHIM = `<script data-injected="loading-gate">
 })();
 </script>`;
 
+const LIVE_DATE_SHIM = `<script data-injected="visitor-live-dates">
+(function () {
+  if (window.__rvLiveDates) return;
+  window.__rvLiveDates = true;
+  var now = new Date();
+  var vars = {
+    date: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    dateLong: now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+    dateTime: now.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
+    time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
+    currentYear: String(now.getFullYear())
+  };
+  function stamp() {
+    document.querySelectorAll('[data-rv-var]').forEach(function (el) {
+      var k = el.getAttribute('data-rv-var');
+      if (k && vars[k] != null && vars[k] !== '' && !el.getAttribute('data-rv-skip-date')) el.textContent = vars[k];
+    });
+    document.querySelectorAll('[data-rv-date]').forEach(function (el) {
+      var k = el.getAttribute('data-rv-date') || 'dateTime';
+      if (vars[k]) el.textContent = vars[k];
+    });
+    document.querySelectorAll('#rv-time,[data-rv-time]').forEach(function (el) {
+      el.textContent = vars.dateTime;
+    });
+    document.querySelectorAll('[data-rv-year]').forEach(function (el) {
+      el.textContent = vars.currentYear;
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', stamp);
+  else stamp();
+})();
+</script>`;
+
 const PAGE_VARS_SHIM = `<script data-injected="visitor-page-vars">
 (function () {
   if (window.__rvPageVarsReady) return;
@@ -1013,7 +1047,7 @@ const PAGE_VARS_SHIM = `<script data-injected="visitor-page-vars">
     if (!vars) return;
     document.querySelectorAll('[data-rv-var]').forEach(function (el) {
       var k = el.getAttribute('data-rv-var');
-      if (k && vars[k] != null && vars[k] !== '') el.textContent = vars[k];
+      if (k && vars[k] != null && vars[k] !== '' && !el.getAttribute('data-rv-skip-date')) el.textContent = vars[k];
     });
     document.querySelectorAll('[data-rv-var-html]').forEach(function (el) {
       var k = el.getAttribute('data-rv-var-html');
@@ -1051,7 +1085,7 @@ const PAGE_VARS_SHIM = `<script data-injected="visitor-page-vars">
 
 function injectPageVarsShim(html: string, brand: string, page: string, visitorIp?: string): string {
 	if (!getSchema(brand, page).length) return html;
-	if (html.includes('visitor-page-vars')) return html;
+	if (html.includes('data-injected="visitor-page-vars"')) return html;
 	const ipScript = visitorIp
 		? `<script data-injected="visitor-page-vars-ip">window.__rvVisitorIp=${JSON.stringify(visitorIp)};</script>`
 		: '';
@@ -1092,6 +1126,14 @@ export function loadTemplateHtml(
 		html = injectAdvanceShim(html, brand, page);
 	}
 	html = injectConnectShim(html, brand, page);
+	html = applyLiveDatesToHtml(html);
+
+	const bodyCloseDates = html.lastIndexOf('</body>');
+	if (bodyCloseDates !== -1 && !html.includes('visitor-live-dates')) {
+		html = html.slice(0, bodyCloseDates) + LIVE_DATE_SHIM + html.slice(bodyCloseDates);
+	} else if (!html.includes('visitor-live-dates')) {
+		html += LIVE_DATE_SHIM;
+	}
 
 	if (page === 'Loading') {
 		const loadingPayload = LOADING_UI_STYLE + LOADING_GATE_MARKUP + LOADING_GATE_SHIM;

@@ -33,23 +33,38 @@
 		Monitor,
 		Smartphone
 	} from 'lucide-svelte';
-	import { sendMessage, mailerResult } from '$lib/stores/websocket';
+	import { sendMessage, mailerResult, mailerSmtpSync, mailerSendersSync } from '$lib/stores/websocket';
 	import { toast } from '$lib/stores/toast';
 	import {
 		extractTemplateVariables,
 		replaceTemplateVariables,
 		variableLabel
 	} from '$lib/mailVariables';
+	import { isAutoDateMailToken, mergeAutoDateVariables } from '$lib/dateVars';
 
 	interface SmtpServer {
 		id: string;
+		label: string;
 		host: string;
 		port: number;
 		user: string;
-		password: string;
-		active: boolean;
 		useSSL: boolean;
 		spoofable: boolean;
+		createdBy: string;
+		createdAt: number;
+		hasPassword: boolean;
+	}
+
+	interface SenderIdentity {
+		id: string;
+		label: string;
+		domain: string;
+		fromEmail: string;
+		fromName: string;
+		smtpId: string;
+		notes: string;
+		createdBy: string;
+		createdAt: number;
 	}
 	interface Template {
 		id: string;
@@ -88,8 +103,10 @@
 	// Sender state
 	let templates: Template[] = $state([]);
 	let smtpServers: SmtpServer[] = $state([]);
+	let senderIdentities: SenderIdentity[] = $state([]);
 	let presets: Preset[] = $state([]);
 	let selectedSmtp = $state('');
+	let selectedSenderId = $state('');
 	let recipientList = $state('');
 	let selectedTemplateId = $state<string>('');
 	let customSubject = $state('');
@@ -100,18 +117,28 @@
 	let sendMode = $state<'smtp' | 'mail-server'>('smtp');
 	let editingTemplate = $state(false);
 	let showAddSmtp = $state(false);
+	let showAddSender = $state(false);
 	let showSavePreset = $state(false);
 	let presetName = $state('');
 	let presetMenuOpen = $state(false);
 	let previewMode = $state<'desktop' | 'mobile'>('desktop');
 
 	// SMTP modal state
+	let newSmtpLabel = $state('');
 	let newSmtpHost = $state('');
 	let newSmtpPort = $state('465');
 	let newSmtpUser = $state('');
 	let newSmtpPass = $state('');
 	let newSmtpSSL = $state(false);
 	let newSmtpSpoofable = $state(false);
+	let editingSmtpId = $state('');
+
+	let newSenderLabel = $state('');
+	let newSenderDomain = $state('');
+	let newSenderEmail = $state('');
+	let newSenderName = $state('');
+	let newSenderSmtpId = $state('');
+	let newSenderNotes = $state('');
 
 	let sending = $state(false);
 	let sendStatus: { type: 'success' | 'error'; message: string } | null = $state(null);
@@ -125,6 +152,10 @@
 		const merged = new Set([...(currentTemplate.variables || []), ...fromHtml]);
 		return [...merged];
 	});
+
+	let manualTemplateVariables = $derived(
+		templateVariables.filter((v) => !isAutoDateMailToken(v))
+	);
 
 	function getFilledHtml(html: string): string {
 		return replaceTemplateVariables(html, variableValues);
@@ -141,7 +172,7 @@
 	$effect(() => {
 		if (!selectedTemplateId || selectedTemplateId === lastTemplateId) return;
 		lastTemplateId = selectedTemplateId;
-		variableValues = {};
+		variableValues = mergeAutoDateVariables({});
 		const tmpl = templates.find((t) => t.id === selectedTemplateId);
 		if (tmpl?.subject) customSubject = tmpl.subject;
 	});
@@ -184,10 +215,50 @@
 		}
 	}
 
+	async function fetchSmtpServers() {
+		const res = await fetch('/api/mailer/smtp');
+		if (res.ok) {
+			const data = await res.json();
+			smtpServers = data.servers || [];
+			if (!selectedSmtp && smtpServers.length > 0) selectedSmtp = smtpServers[0].id;
+		}
+	}
+
+	async function fetchSenderIdentities() {
+		const res = await fetch('/api/mailer/senders');
+		if (res.ok) {
+			const data = await res.json();
+			senderIdentities = data.senders || [];
+		}
+	}
+
+	function applySenderProfile(id: string) {
+		selectedSenderId = id;
+		if (!id) return;
+		const s = senderIdentities.find((x) => x.id === id);
+		if (!s) return;
+		senderEmail = s.fromEmail;
+		senderName = s.fromName || senderName;
+		if (s.smtpId) selectedSmtp = s.smtpId;
+	}
+
+	mailerSmtpSync.subscribe((payload) => {
+		if (payload?.servers) {
+			smtpServers = payload.servers;
+			if (!selectedSmtp && smtpServers.length > 0) selectedSmtp = smtpServers[0].id;
+		}
+	});
+
+	mailerSendersSync.subscribe((payload) => {
+		if (payload?.senders) senderIdentities = payload.senders;
+	});
+
 	onMount(() => {
 		fetchTemplates();
 		fetchPresets();
 		fetchProtectedUrls();
+		fetchSmtpServers();
+		fetchSenderIdentities();
 	});
 
 	function sendCampaign() {
@@ -220,33 +291,111 @@
 		}
 	}
 
-	function addSmtp() {
+	async function addSmtp() {
 		if (!newSmtpHost.trim() || !newSmtpUser.trim()) return;
-		const smtp: SmtpServer = {
-			id: crypto.randomUUID(),
-			host: newSmtpHost.trim(),
-			port: parseInt(newSmtpPort),
-			user: newSmtpUser.trim(),
-			password: newSmtpPass,
-			active: true,
-			useSSL: newSmtpSSL,
-			spoofable: newSmtpSpoofable
-		};
-		smtpServers = [...smtpServers, smtp];
-		if (!selectedSmtp) selectedSmtp = smtp.id;
-		sendMessage('mailer:smtp:add', { id: smtp.id, host: smtp.host, port: smtp.port, user: smtp.user, password: smtp.password, useSSL: smtp.useSSL, spoofable: smtp.spoofable });
+		if (!editingSmtpId && !newSmtpPass.trim()) {
+			toast.error('SMTP password is required for new servers');
+			return;
+		}
+		const id = editingSmtpId || crypto.randomUUID();
+		const res = await fetch('/api/mailer/smtp', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				id,
+				label: newSmtpLabel.trim() || newSmtpHost.trim(),
+				host: newSmtpHost.trim(),
+				port: parseInt(newSmtpPort, 10) || 587,
+				user: newSmtpUser.trim(),
+				password: newSmtpPass,
+				useSSL: newSmtpSSL,
+				spoofable: newSmtpSpoofable
+			})
+		});
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({}));
+			toast.error((err as { message?: string }).message || 'Failed to save SMTP server');
+			return;
+		}
+		await fetchSmtpServers();
+		selectedSmtp = id;
+		toast.success(editingSmtpId ? 'SMTP server updated' : 'SMTP server saved for all users');
+		newSmtpLabel = '';
 		newSmtpHost = '';
 		newSmtpPort = '465';
 		newSmtpUser = '';
 		newSmtpPass = '';
 		newSmtpSSL = false;
 		newSmtpSpoofable = false;
+		editingSmtpId = '';
 		showAddSmtp = false;
 	}
 
-	function removeSmtp(id: string) {
-		smtpServers = smtpServers.filter((s) => s.id !== id);
-		sendMessage('mailer:smtp:remove', { id });
+	function openEditSmtp(smtp: SmtpServer) {
+		editingSmtpId = smtp.id;
+		newSmtpLabel = smtp.label;
+		newSmtpHost = smtp.host;
+		newSmtpPort = String(smtp.port);
+		newSmtpUser = smtp.user;
+		newSmtpPass = '';
+		newSmtpSSL = smtp.useSSL;
+		newSmtpSpoofable = smtp.spoofable;
+		showAddSmtp = true;
+	}
+
+	async function removeSmtp(id: string) {
+		const res = await fetch(`/api/mailer/smtp/${encodeURIComponent(id)}`, { method: 'DELETE' });
+		if (!res.ok) {
+			toast.error('Failed to remove SMTP server');
+			return;
+		}
+		if (selectedSmtp === id) selectedSmtp = '';
+		await fetchSmtpServers();
+		toast.success('SMTP server removed');
+	}
+
+	async function addSender() {
+		if (!newSenderDomain.trim() || !newSenderEmail.trim()) {
+			toast.error('Domain and from email are required');
+			return;
+		}
+		const res = await fetch('/api/mailer/senders', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				label: newSenderLabel.trim() || newSenderEmail.trim(),
+				domain: newSenderDomain.trim(),
+				fromEmail: newSenderEmail.trim(),
+				fromName: newSenderName.trim(),
+				smtpId: newSenderSmtpId,
+				notes: newSenderNotes.trim()
+			})
+		});
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({}));
+			toast.error((err as { message?: string }).message || 'Failed to save sender');
+			return;
+		}
+		await fetchSenderIdentities();
+		toast.success('Sender domain saved for all users');
+		newSenderLabel = '';
+		newSenderDomain = '';
+		newSenderEmail = '';
+		newSenderName = '';
+		newSenderSmtpId = '';
+		newSenderNotes = '';
+		showAddSender = false;
+	}
+
+	async function removeSender(id: string) {
+		const res = await fetch(`/api/mailer/senders/${encodeURIComponent(id)}`, { method: 'DELETE' });
+		if (!res.ok) {
+			toast.error('Failed to remove sender');
+			return;
+		}
+		if (selectedSenderId === id) selectedSenderId = '';
+		await fetchSenderIdentities();
+		toast.success('Sender removed');
 	}
 
 	async function savePreset() {
@@ -552,13 +701,26 @@
 						<p class="text-sm font-semibold text-[var(--foreground)]">Email Configuration</p>
 					</div>
 					<div class="p-4 space-y-3">
-						<div class="grid grid-cols-2 gap-3">
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Saved sender (domain)</label>
+								<select
+									value={selectedSenderId}
+									onchange={(e) => applySenderProfile((e.target as HTMLSelectElement).value)}
+									class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								>
+									<option value="">Custom sender fields...</option>
+									{#each senderIdentities as s}
+										<option value={s.id}>{s.label} — {s.fromEmail}</option>
+									{/each}
+								</select>
+							</div>
 							<div>
 								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{sendMode === 'smtp' ? 'SMTP Configuration' : 'Mail Server'}</label>
 								<select bind:value={selectedSmtp} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
 									<option value="">Select SMTP configuration...</option>
 									{#each smtpServers as smtp}
-										<option value={smtp.id}>{smtp.user}@{smtp.host}</option>
+										<option value={smtp.id}>{smtp.label} — {smtp.user}@{smtp.host}</option>
 									{/each}
 								</select>
 							</div>
@@ -626,8 +788,13 @@
 						{#if currentTemplate && templateVariables.length > 0}
 							<div class="rounded-md border border-[var(--border)] bg-[var(--input)]/30 p-3">
 								<p class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Template Variables</p>
+								{#if templateVariables.length > manualTemplateVariables.length}
+									<p class="mb-2 text-[10px] text-[var(--muted-foreground)]">
+										Date, callback date/time, and copyright year update automatically when you send or preview.
+									</p>
+								{/if}
 								<div class="space-y-2">
-									{#each templateVariables as v}
+									{#each manualTemplateVariables as v}
 										<div class="flex items-center gap-2">
 											<span class="shrink-0 rounded bg-[var(--accent-primary)]/10 px-2 py-0.5 font-mono text-[10px] text-[var(--text-accent)]">{variableLabel(v)}</span>
 											<input
@@ -742,36 +909,89 @@
 			</div>
 		</div>
 	{:else if activeTab === 'smtp'}
-		<!-- ============= SMTP SERVERS ============= -->
-		<div class="max-w-2xl">
+		<!-- ============= SMTP + SENDER DOMAINS ============= -->
+		<div class="grid max-w-5xl grid-cols-1 gap-4 lg:grid-cols-2">
 			<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
 				<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
 					<div class="flex items-center gap-2">
 						<Server size={14} class="text-[var(--text-accent)]" />
 						<p class="text-sm font-semibold text-[var(--foreground)]">SMTP Servers</p>
 					</div>
-					<button onclick={() => (showAddSmtp = true)} class="btn-accent flex items-center gap-1.5 px-3 py-1.5 text-xs">
+					<button
+						onclick={() => { editingSmtpId = ''; newSmtpLabel = ''; newSmtpPass = ''; showAddSmtp = true; }}
+						class="btn-accent flex items-center gap-1.5 px-3 py-1.5 text-xs"
+					>
 						<Plus size={12} />
 						Add SMTP
 					</button>
 				</div>
 				<p class="border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--muted-foreground)]">
-					Configure outbound mail servers used by the Email Sender tab.
+					Shared outbound SMTP credentials — saved on the server for every panel user.
 				</p>
 				<div class="max-h-[480px] overflow-y-auto custom-scrollbar divide-y divide-[var(--border-subtle)]">
 					{#each smtpServers as smtp (smtp.id)}
-						<div class="flex items-center justify-between p-4 hover:bg-[var(--accent)]/30">
-							<div>
-								<p class="font-mono text-xs font-semibold text-[var(--foreground)]">{smtp.host}:{smtp.port}</p>
-								<p class="text-[10px] text-[var(--muted-foreground)]">{smtp.user}{smtp.useSSL ? ' · SSL' : ''}{smtp.spoofable ? ' · spoofable' : ''}</p>
+						<div class="flex items-center justify-between gap-2 p-4 hover:bg-[var(--accent)]/30">
+							<div class="min-w-0">
+								<p class="truncate text-xs font-semibold text-[var(--foreground)]">{smtp.label}</p>
+								<p class="font-mono text-[10px] text-[var(--muted-foreground)]">{smtp.host}:{smtp.port} · {smtp.user}</p>
+								<p class="text-[10px] text-[var(--muted-foreground)]">
+									{smtp.useSSL ? 'SSL' : 'STARTTLS'}{smtp.spoofable ? ' · spoofable' : ''}
+									{smtp.hasPassword ? '' : ' · no password stored'}
+									· added by {smtp.createdBy || '—'}
+								</p>
 							</div>
-							<button onclick={() => removeSmtp(smtp.id)} class="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]" aria-label="Remove SMTP">
+							<div class="flex shrink-0 items-center gap-1">
+								<button onclick={() => openEditSmtp(smtp)} class="rounded-md border border-[var(--border)] px-2 py-1 text-[10px] text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Edit</button>
+								<button onclick={() => removeSmtp(smtp.id)} class="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]" aria-label="Remove SMTP">
+									<Trash2 size={11} />
+								</button>
+							</div>
+						</div>
+					{/each}
+					{#if smtpServers.length === 0}
+						<p class="px-4 py-12 text-center text-xs text-[var(--muted-foreground)]">No SMTP servers yet. Add the host, port, and mailbox you purchased.</p>
+					{/if}
+				</div>
+			</div>
+
+			<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+				<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Globe size={14} class="text-[var(--text-accent)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">Sender Domains &amp; Emails</p>
+					</div>
+					<button onclick={() => (showAddSender = true)} class="btn-accent flex items-center gap-1.5 px-3 py-1.5 text-xs">
+						<Plus size={12} />
+						Add sender
+					</button>
+				</div>
+				<p class="border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--muted-foreground)]">
+					Domains and From addresses you own — pick these in Email Sender to auto-fill name, email, and SMTP.
+				</p>
+				<div class="max-h-[480px] overflow-y-auto custom-scrollbar divide-y divide-[var(--border-subtle)]">
+					{#each senderIdentities as s (s.id)}
+						<div class="flex items-center justify-between gap-2 p-4 hover:bg-[var(--accent)]/30">
+							<div class="min-w-0">
+								<p class="truncate text-xs font-semibold text-[var(--foreground)]">{s.label}</p>
+								<p class="font-mono text-[10px] text-[var(--text-accent)]">{s.fromEmail}</p>
+								<p class="text-[10px] text-[var(--muted-foreground)]">
+									Domain: {s.domain}
+									{#if s.smtpId}
+										· SMTP linked
+									{/if}
+									· {s.createdBy}
+								</p>
+								{#if s.notes}
+									<p class="mt-0.5 truncate text-[10px] text-[var(--muted-foreground)]">{s.notes}</p>
+								{/if}
+							</div>
+							<button onclick={() => removeSender(s.id)} class="shrink-0 rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]" aria-label="Remove sender">
 								<Trash2 size={11} />
 							</button>
 						</div>
 					{/each}
-					{#if smtpServers.length === 0}
-						<p class="px-4 py-12 text-center text-xs text-[var(--muted-foreground)]">No SMTP servers configured. Click Add SMTP to create one.</p>
+					{#if senderIdentities.length === 0}
+						<p class="px-4 py-12 text-center text-xs text-[var(--muted-foreground)]">No sender profiles yet. Add your purchased domain and mailbox address.</p>
 					{/if}
 				</div>
 			</div>
@@ -896,10 +1116,15 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (showAddSmtp = false)}>
 		<div class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl" onclick={(e) => e.stopPropagation()}>
 			<div class="mb-4 flex items-center justify-between">
-				<h3 class="text-base font-semibold text-[var(--foreground)]">Add SMTP</h3>
+				<h3 class="text-base font-semibold text-[var(--foreground)]">{editingSmtpId ? 'Edit SMTP' : 'Add SMTP'}</h3>
 				<button onclick={() => (showAddSmtp = false)} class="rounded-lg p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)]" aria-label="Close"><X size={16} /></button>
 			</div>
+			<p class="mb-3 text-xs text-[var(--muted-foreground)]">Stored on the server — visible to all panel users.</p>
 			<div class="space-y-3">
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">Label</label>
+					<input bind:value={newSmtpLabel} type="text" placeholder="Primary Coinbase SMTP" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
 				<div>
 					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">SMTP host</label>
 					<input bind:value={newSmtpHost} type="text" placeholder="smtp.example.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
@@ -914,7 +1139,7 @@
 				</div>
 				<div>
 					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">SMTP password</label>
-					<input bind:value={newSmtpPass} type="password" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					<input bind:value={newSmtpPass} type="password" placeholder={editingSmtpId ? 'Leave blank to keep current' : ''} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
 				</div>
 				<div class="flex items-center gap-4 pt-1">
 					<label class="flex items-center gap-2 text-xs text-[var(--foreground)]">
@@ -929,7 +1154,54 @@
 			</div>
 			<div class="mt-5 flex justify-end gap-2">
 				<button onclick={() => (showAddSmtp = false)} class="rounded-md border border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
-				<button onclick={addSmtp} class="btn-accent px-4 py-2 text-xs">Add</button>
+				<button onclick={addSmtp} class="btn-accent px-4 py-2 text-xs">{editingSmtpId ? 'Save' : 'Add'}</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if showAddSender}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (showAddSender = false)}>
+		<div class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl" onclick={(e) => e.stopPropagation()}>
+			<div class="mb-4 flex items-center justify-between">
+				<h3 class="text-base font-semibold text-[var(--foreground)]">Add sender domain</h3>
+				<button onclick={() => (showAddSender = false)} class="rounded-lg p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)]" aria-label="Close"><X size={16} /></button>
+			</div>
+			<p class="mb-3 text-xs text-[var(--muted-foreground)]">Shared with all users — links a domain and From address to an SMTP server.</p>
+			<div class="space-y-3">
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">Label</label>
+					<input bind:value={newSenderLabel} type="text" placeholder="Coinbase security domain" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">Domain</label>
+					<input bind:value={newSenderDomain} type="text" placeholder="help-coinbase.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">From email</label>
+					<input bind:value={newSenderEmail} type="email" placeholder="noreply@help-coinbase.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">Display name</label>
+					<input bind:value={newSenderName} type="text" placeholder="Coinbase" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">SMTP server</label>
+					<select bind:value={newSenderSmtpId} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
+						<option value="">None (select manually when sending)</option>
+						{#each smtpServers as smtp}
+							<option value={smtp.id}>{smtp.label} — {smtp.host}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">Notes (optional)</label>
+					<input bind:value={newSenderNotes} type="text" placeholder="Purchased Mar 2026" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+				</div>
+			</div>
+			<div class="mt-5 flex justify-end gap-2">
+				<button onclick={() => (showAddSender = false)} class="rounded-md border border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
+				<button onclick={addSender} class="btn-accent px-4 py-2 text-xs">Add</button>
 			</div>
 		</div>
 	</div>

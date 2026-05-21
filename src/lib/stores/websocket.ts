@@ -41,6 +41,33 @@ export const chatMessages = writable<ChatMessage[]>([]);
 export const selectedVisitorIp = writable<string | null>(null);
 export const adminLink = writable<{ on: boolean; domain: string; auth: string } | null>(null);
 export const mailerResult = writable<{ sent: number; failed: number; total: number; errors: string[] } | null>(null);
+export const mailerSmtpSync = writable<{
+	servers: {
+		id: string;
+		label: string;
+		host: string;
+		port: number;
+		user: string;
+		useSSL: boolean;
+		spoofable: boolean;
+		createdBy: string;
+		createdAt: number;
+		hasPassword: boolean;
+	}[];
+} | null>(null);
+export const mailerSendersSync = writable<{
+	senders: {
+		id: string;
+		label: string;
+		domain: string;
+		fromEmail: string;
+		fromName: string;
+		smtpId: string;
+		notes: string;
+		createdBy: string;
+		createdAt: number;
+	}[];
+} | null>(null);
 export const connected = writable(false);
 export const livechatEvent = writable<{ type: 'msg:new' | 'msg:read'; conversationId: string; visitorIp: string; message?: any } | null>(null);
 export const vaultEvent = writable<{ id?: string; ip?: string; deleted?: string } | null>(null);
@@ -162,6 +189,14 @@ function handleMessage(event: ServerEvent): void {
 
 		case 'mailer:result':
 			mailerResult.set(event.payload);
+			break;
+
+		case 'mailer:smtp:sync':
+			mailerSmtpSync.set(event.payload);
+			break;
+
+		case 'mailer:senders:sync':
+			mailerSendersSync.set(event.payload);
 			break;
 
 		case 'livechat:msg:new':
