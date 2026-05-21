@@ -9,26 +9,7 @@
  */
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { serverState } from '$lib/server/state';
-import { templateLabelToVisitorPath } from '$lib/server/visitorRouter';
-import { labelToUrl } from '$lib/server/funnel';
-
-function buildRedirectUrl(
-	targetLabel: string,
-	module: string,
-	lastTwoDigits?: string,
-	emailFrom?: string,
-	emailTo?: string
-): string | null {
-	const path = templateLabelToVisitorPath(targetLabel, module);
-	if (!path) return null;
-
-	const qp = new URLSearchParams();
-	if (lastTwoDigits) qp.set('last2', lastTwoDigits);
-	if (emailFrom) qp.set('emailFrom', emailFrom);
-	if (emailTo) qp.set('emailTo', emailTo);
-	const qs = qp.toString();
-	return qs ? `${path}?${qs}` : path;
-}
+import { applyLoadingInterstitial, resolveLabelRedirectUrl } from '$lib/server/funnel';
 
 export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 	const brand = url.searchParams.get('brand')?.trim() || '';
@@ -51,15 +32,22 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 		);
 	}
 
-	const redirectUrl = isPreview === 'true'
-		? labelToUrl(targetRoute)
-		: buildRedirectUrl(
+	const qp = new URLSearchParams();
+	if (visitor.lastTwoDigits) qp.set('last2', visitor.lastTwoDigits);
+	if (visitor.emailFrom) qp.set('emailFrom', visitor.emailFrom);
+	if (visitor.emailTo) qp.set('emailTo', visitor.emailTo);
+
+	const isVisitorHost = isPreview !== 'true';
+	const redirectUrl = applyLoadingInterstitial(
+		resolveLabelRedirectUrl(
 			targetRoute,
 			visitor.module,
-			visitor.lastTwoDigits,
-			visitor.emailFrom,
-			visitor.emailTo
-		);
+			isVisitorHost,
+			qp.size ? qp : undefined
+		),
+		qp.size ? qp : undefined,
+		{ isVisitorHost }
+	);
 
 	return json(
 		{ redirectUrl, lastPageRoute: targetRoute },

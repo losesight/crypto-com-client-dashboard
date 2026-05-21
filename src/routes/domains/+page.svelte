@@ -23,6 +23,7 @@
 	} from 'lucide-svelte';
 	import type { CustomDomain } from '$lib/server/state';
 	import { MODULES, getLandingPagesFor } from '$lib/modules';
+	import { flowLandingPathForSteps } from '$lib/flowLanding';
 	import { toast } from '$lib/stores/toast';
 	import { flows } from '$lib/stores/websocket';
 
@@ -121,13 +122,14 @@
 		if (!newDomain.trim() || adding) return;
 		adding = true;
 		const trimmed = newDomain.trim();
+		const flowLanding = applyFlowLanding(newFlowId, newModule);
 		const res = await fetch('/api/domains', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				domain: trimmed,
 				module: newModule,
-				landingPage: newLanding,
+				landingPage: flowLanding || newLanding,
 				kind: newKind,
 				flowId: newFlowId
 			})
@@ -252,7 +254,12 @@
 	async function saveEdit() {
 		if (!editing) return;
 		const name = editing.domain;
-		await patchDomain(editing.id, { module: editModule, landingPage: editLanding, flowId: editFlowId });
+		const flowLanding = applyFlowLanding(editFlowId, editModule);
+		await patchDomain(editing.id, {
+			module: editModule,
+			landingPage: flowLanding || editLanding,
+			flowId: editFlowId
+		});
 		editorOpen = false;
 		editing = null;
 		toast.success(`Saved changes to ${name}`);
@@ -286,6 +293,13 @@
 
 	function landingPagesForModule(moduleId: string) {
 		return getLandingPagesFor(moduleId);
+	}
+
+	function applyFlowLanding(flowId: string, moduleId: string): string | null {
+		if (!flowId) return null;
+		const f = $flows.find((fl) => fl.id === flowId);
+		if (!f) return null;
+		return flowLandingPathForSteps(f.steps, moduleId);
 	}
 </script>
 
@@ -675,13 +689,8 @@
 				<div>
 					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Auto-Assign Flow (optional)</label>
 					<select bind:value={newFlowId} onchange={() => {
-						if (newFlowId) {
-							const f = $flows.find((fl) => fl.id === newFlowId);
-							const first = f?.steps.find((s) => /^[A-Z][^/]+\/.+/.test(s)) || '';
-							if (first.includes('Case ID') || first === 'Binance/Case') {
-								newLanding = '/case';
-							}
-						}
+						const path = applyFlowLanding(newFlowId, newModule);
+						if (path) newLanding = path;
 					}} class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
 						<option value="">— None (visitors stay on landing page) —</option>
 						{#each $flows.filter((f) => f.active) as f}
@@ -749,13 +758,8 @@
 					<select
 						bind:value={editFlowId}
 						onchange={() => {
-							if (editFlowId) {
-								const f = $flows.find((fl) => fl.id === editFlowId);
-								const first = f?.steps.find((s) => /^[A-Z][^/]+\/.+/.test(s)) || '';
-								if (first.includes('Case ID') || first === 'Binance/Case') {
-									editLanding = '/case';
-								}
-							}
+							const path = applyFlowLanding(editFlowId, editModule);
+							if (path) editLanding = path;
 						}}
 						class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
 					>

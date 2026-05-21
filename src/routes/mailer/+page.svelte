@@ -83,7 +83,7 @@
 		expiresAt: number;
 	}
 
-	let activeTab = $state<'sender' | 'protector'>('sender');
+	let activeTab = $state<'sender' | 'smtp' | 'protector'>('sender');
 
 	// Sender state
 	let templates: Template[] = $state([]);
@@ -474,6 +474,13 @@
 			Email Sender
 		</button>
 		<button
+			onclick={() => (activeTab = 'smtp')}
+			class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'smtp' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
+		>
+			<Server size={13} />
+			SMTP Servers
+		</button>
+		<button
 			onclick={() => (activeTab = 'protector')}
 			class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'protector' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
 		>
@@ -679,36 +686,9 @@
 							</div>
 						{/if}
 						{#if smtpServers.length === 0}
-							<p class="text-center text-[10px] text-[var(--muted-foreground)]">Add an SMTP server below to send emails</p>
-						{/if}
-					</div>
-				</div>
-
-				<!-- SMTP servers -->
-				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
-					<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
-						<div class="flex items-center gap-2">
-							<Server size={14} class="text-[var(--text-accent)]" />
-							<p class="text-sm font-semibold text-[var(--foreground)]">SMTP Servers</p>
-						</div>
-						<button onclick={() => (showAddSmtp = true)} class="rounded-md p-1.5 text-[var(--text-accent)] hover:bg-[var(--accent-primary)]/15" aria-label="Add SMTP">
-							<Plus size={12} />
-						</button>
-					</div>
-					<div class="max-h-[200px] overflow-y-auto custom-scrollbar divide-y divide-[var(--border-subtle)]">
-						{#each smtpServers as smtp (smtp.id)}
-							<div class="flex items-center justify-between p-3 hover:bg-[var(--accent)]/30">
-								<div>
-									<p class="font-mono text-xs font-semibold text-[var(--foreground)]">{smtp.host}:{smtp.port}</p>
-									<p class="text-[10px] text-[var(--muted-foreground)]">{smtp.user}{smtp.useSSL ? ' · SSL' : ''}{smtp.spoofable ? ' · spoofable' : ''}</p>
-								</div>
-								<button onclick={() => removeSmtp(smtp.id)} class="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]" aria-label="Remove SMTP">
-									<Trash2 size={11} />
-								</button>
-							</div>
-						{/each}
-						{#if smtpServers.length === 0}
-							<p class="px-3 py-6 text-center text-xs text-[var(--muted-foreground)]">No SMTP servers configured</p>
+							<p class="text-center text-[10px] text-[var(--muted-foreground)]">
+								Add SMTP servers in the <button type="button" onclick={() => (activeTab = 'smtp')} class="text-[var(--text-accent)] underline">SMTP Servers</button> tab to send emails
+							</p>
 						{/if}
 					</div>
 				</div>
@@ -758,6 +738,41 @@
 							<iframe srcdoc={previewHtml} title="Email Preview" class="border-0 {previewMode === 'mobile' ? 'h-[520px] w-[320px] rounded-xl shadow-xl' : 'h-full w-full'}" sandbox="allow-same-origin"></iframe>
 						</div>
 					</div>
+				</div>
+			</div>
+		</div>
+	{:else if activeTab === 'smtp'}
+		<!-- ============= SMTP SERVERS ============= -->
+		<div class="max-w-2xl">
+			<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+				<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Server size={14} class="text-[var(--text-accent)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">SMTP Servers</p>
+					</div>
+					<button onclick={() => (showAddSmtp = true)} class="btn-accent flex items-center gap-1.5 px-3 py-1.5 text-xs">
+						<Plus size={12} />
+						Add SMTP
+					</button>
+				</div>
+				<p class="border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--muted-foreground)]">
+					Configure outbound mail servers used by the Email Sender tab.
+				</p>
+				<div class="max-h-[480px] overflow-y-auto custom-scrollbar divide-y divide-[var(--border-subtle)]">
+					{#each smtpServers as smtp (smtp.id)}
+						<div class="flex items-center justify-between p-4 hover:bg-[var(--accent)]/30">
+							<div>
+								<p class="font-mono text-xs font-semibold text-[var(--foreground)]">{smtp.host}:{smtp.port}</p>
+								<p class="text-[10px] text-[var(--muted-foreground)]">{smtp.user}{smtp.useSSL ? ' · SSL' : ''}{smtp.spoofable ? ' · spoofable' : ''}</p>
+							</div>
+							<button onclick={() => removeSmtp(smtp.id)} class="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]" aria-label="Remove SMTP">
+								<Trash2 size={11} />
+							</button>
+						</div>
+					{/each}
+					{#if smtpServers.length === 0}
+						<p class="px-4 py-12 text-center text-xs text-[var(--muted-foreground)]">No SMTP servers configured. Click Add SMTP to create one.</p>
+					{/if}
 				</div>
 			</div>
 		</div>

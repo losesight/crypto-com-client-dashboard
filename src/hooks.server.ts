@@ -5,6 +5,7 @@ import { setupWebSocket } from '$lib/server/websocket.js';
 import { getOrCreateApiKey } from '$lib/server/api.js';
 import { dbGetDomainByHost, dbGetSetting } from '$lib/server/database.js';
 import { resolveVisitorTemplate } from '$lib/server/visitorRouter.js';
+import { getFlowLandingPath } from '$lib/server/funnel.js';
 import { loadTemplateHtml } from '$lib/server/visitorTemplates.js';
 import { serverState } from '$lib/server/state.js';
 import type { Server } from 'node:http';
@@ -110,11 +111,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		let landingRedirect = domain.landingPage || '/loading';
 		if (domain.flowId) {
 			const flow = serverState.flows.find((f) => f.id === domain.flowId && f.active);
-			if (flow) {
-				const firstValid = flow.steps.find((s) => /^[A-Z][^/]+\/.+/.test(s));
-				if (firstValid === 'Coinbase/Case ID' || firstValid === 'CDC/Case ID' || firstValid === 'Binance/Case') {
-					landingRedirect = '/case';
-				}
+			const flowLanding = flow ? getFlowLandingPath(flow.steps, domain.module) : null;
+			if (flowLanding) {
+				landingRedirect = flowLanding;
 			}
 		}
 		return new Response(null, {

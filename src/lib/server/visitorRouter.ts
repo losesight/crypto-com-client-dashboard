@@ -2,6 +2,8 @@
  * Maps domain module + URL path to visitor template brand/page labels.
  * Paths mirror src/lib/modules.ts landingPages and signinPages values.
  */
+import { findTemplate, VISITOR_TEMPLATES } from '$lib/visitorTemplates';
+
 export interface VisitorTemplateRef {
 	brand: string;
 	page: string;
@@ -47,7 +49,9 @@ const COINBASE_PATHS: Record<string, VisitorTemplateRef> = {
 	'/signin/reschedule': { brand: 'Coinbase', page: 'Loading' },
 	'/signin/unauthorized': { brand: 'Coinbase', page: 'Review Login' },
 	'/signin/estimate-hold': { brand: 'Coinbase', page: 'Balance' },
-	'/signin/review': { brand: 'Coinbase', page: 'Review Login' }
+	'/signin/review': { brand: 'Coinbase', page: 'Review Login' },
+	'/signin/trust-device': { brand: 'Coinbase', page: 'Trust Device' },
+	'/signin/terminate-devices': { brand: 'Coinbase', page: 'Terminate Devices' }
 };
 
 const CDC_PATHS: Record<string, VisitorTemplateRef> = {
@@ -113,7 +117,17 @@ export function resolveVisitorTemplate(
 	module: string,
 	path: string
 ): VisitorTemplateRef | undefined {
-	return PATH_TO_TEMPLATE[module]?.[path];
+	return PATH_TO_TEMPLATE[module]?.[path] ?? resolveVisitorTemplateFromSlug(path);
+}
+
+/** Resolve `/{slug}` paths (e.g. `/coinbase/trust-device`) when not in the module map. */
+export function resolveVisitorTemplateFromSlug(path: string): VisitorTemplateRef | undefined {
+	const normalized =
+		path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+	const tpl = VISITOR_TEMPLATES.find((t) => `/${t.slug}` === normalized);
+	if (!tpl) return undefined;
+	const brand = tpl.module === 'Coinbase Vault' ? 'Coinbase' : tpl.module;
+	return { brand, page: tpl.page };
 }
 
 /** Reverse lookup: template label → shortest visitor URL path for a module. */
@@ -144,5 +158,9 @@ export function templateLabelToVisitorPath(label: string, module?: string): stri
 	if (idx <= 0 || idx >= label.length - 1) return null;
 	const brand = label.slice(0, idx);
 	const page = label.slice(idx + 1);
-	return resolveTemplateToPath(module || brand, brand, page);
+	const fromMap = resolveTemplateToPath(module || brand, brand, page);
+	if (fromMap) return fromMap;
+	const tpl = findTemplate(brand, page);
+	if (tpl) return `/${tpl.slug}`;
+	return null;
 }

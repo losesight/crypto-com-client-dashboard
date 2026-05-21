@@ -58,7 +58,9 @@ const COINBASE_SIGNIN = [
 	{ value: '/signin/unauthorized', label: 'Unauthorized' },
 	{ value: '/signin/estimate-hold', label: 'Estimate Hold' },
 	{ value: '/signin/review', label: 'Review Page' },
-	{ value: '/signin/wallet/setup-wallet', label: 'Wallet Setup Main' }
+	{ value: '/signin/wallet/setup-wallet', label: 'Wallet Setup Main' },
+	{ value: '/signin/trust-device', label: 'Trust Device' },
+	{ value: '/signin/terminate-devices', label: 'Terminate Devices' }
 ];
 
 export const MODULES: ModuleDefinition[] = [

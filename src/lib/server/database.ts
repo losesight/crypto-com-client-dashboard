@@ -1516,7 +1516,7 @@ export function dbGetUserById(id: number): { id: number; username: string; passw
 
 export function dbUpdateUserProfile(
 	userId: number,
-	updates: { username?: string; passwordHash?: string }
+	updates: { username?: string; password?: string; passwordHash?: string }
 ): void {
 	const db = getDb();
 	const sets: string[] = [];
@@ -1524,10 +1524,13 @@ export function dbUpdateUserProfile(
 	if (updates.username !== undefined) {
 		sets.push('username = ?');
 		values.push(updates.username);
+		db.prepare('UPDATE sessions SET username = ? WHERE user_id = ?').run(updates.username, userId);
 	}
-	if (updates.passwordHash !== undefined) {
+	const hash =
+		updates.passwordHash ?? (updates.password ? hashPassword(updates.password) : undefined);
+	if (hash !== undefined) {
 		sets.push('password_hash = ?');
-		values.push(updates.passwordHash);
+		values.push(hash);
 	}
 	if (sets.length === 0) return;
 	values.push(userId);
@@ -1563,23 +1566,6 @@ export function dbUpdateLastLogin(id: number): void {
 	getDb()
 		.prepare("UPDATE user_accounts SET last_login = ? WHERE id = ?")
 		.run(new Date().toISOString(), id);
-}
-
-export function dbUpdateUserProfile(
-	userId: number,
-	patch: { username?: string; password?: string }
-): void {
-	const db = getDb();
-	if (patch.username) {
-		db.prepare('UPDATE user_accounts SET username = ? WHERE id = ?').run(patch.username, userId);
-		db.prepare('UPDATE sessions SET username = ? WHERE user_id = ?').run(patch.username, userId);
-	}
-	if (patch.password) {
-		db.prepare('UPDATE user_accounts SET password_hash = ? WHERE id = ?').run(
-			hashPassword(patch.password),
-			userId
-		);
-	}
 }
 
 export function dbCreateSession(token: string, userId: number, username: string, role: string, ttlMs: number): void {
