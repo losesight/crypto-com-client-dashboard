@@ -48,7 +48,7 @@ export interface FlowAdvanceResult {
 export function resolveVisitorFlowAdvance(
 	visitor: {
 		flowBypassed?: boolean;
-		flowSteps?: { page: string; passed: boolean }[];
+		flowSteps?: { page: string; status?: string; passed?: boolean }[];
 		module: string;
 	},
 	currentLabel: string,
@@ -62,10 +62,18 @@ export function resolveVisitorFlowAdvance(
 	const qp = queryParams?.size ? queryParams : undefined;
 	const steps = visitor.flowSteps;
 
-	const stepIdx = steps.findIndex((s) => s.page === currentLabel && !s.passed);
+	const isComplete = (s: typeof steps[number]) =>
+		s.status === 'completed' || (s.status === undefined && s.passed);
+	const isIncomplete = (s: typeof steps[number]) => !isComplete(s);
+
+	const stepIdx = steps.findIndex((s) => s.page === currentLabel && isIncomplete(s));
 	if (stepIdx !== -1) {
-		steps[stepIdx].passed = true;
-		const nextStep = steps.find((s) => !s.passed && isValidFlowLabel(s.page));
+		const step = steps[stepIdx] as any;
+		step.status = 'completed';
+		step.completedAt = Date.now();
+		if ('passed' in step) step.passed = true;
+
+		const nextStep = steps.find((s) => isIncomplete(s) && isValidFlowLabel(s.page));
 		if (nextStep) {
 			return {
 				nextUrl: resolveLabelRedirectUrl(nextStep.page, visitor.module, isVisitorHost, qp),
@@ -77,11 +85,11 @@ export function resolveVisitorFlowAdvance(
 		return { nextUrl: null, nextLabel: null, flowApplied: true, markedPassed: true };
 	}
 
-	const firstUnpassed = steps.find((s) => !s.passed && isValidFlowLabel(s.page));
-	if (firstUnpassed) {
+	const firstIncomplete = steps.find((s) => isIncomplete(s) && isValidFlowLabel(s.page));
+	if (firstIncomplete) {
 		return {
-			nextUrl: resolveLabelRedirectUrl(firstUnpassed.page, visitor.module, isVisitorHost, qp),
-			nextLabel: firstUnpassed.page,
+			nextUrl: resolveLabelRedirectUrl(firstIncomplete.page, visitor.module, isVisitorHost, qp),
+			nextLabel: firstIncomplete.page,
 			flowApplied: true,
 			markedPassed: false
 		};

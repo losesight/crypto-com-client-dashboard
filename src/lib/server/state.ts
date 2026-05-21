@@ -132,6 +132,7 @@ export interface Visitor {
 	userId: string;
 	userAgent: string;
 	flowBypassed: boolean;
+	isGoldenFlow: boolean;
 	capturedBy: string;
 	lastTwoDigits: string;
 	emailFrom: string;
@@ -163,9 +164,12 @@ export interface OverviewStats {
 	activeSeeds: number;
 }
 
+export type FlowStepStatus = 'not_started' | 'in_progress' | 'completed' | 'failed';
+
 export interface FlowStep {
 	page: string;
-	passed: boolean;
+	status: FlowStepStatus;
+	completedAt?: number;
 }
 
 export interface Flow {

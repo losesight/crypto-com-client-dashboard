@@ -303,13 +303,14 @@ function handleNextPage(body: { ip?: string }): void {
 	const visitor = serverState.visitors.get(body.ip);
 	if (!visitor || visitor.flowSteps.length === 0) return;
 
-	const currentIdx = visitor.flowSteps.findIndex((s) => !s.passed);
+	const currentIdx = visitor.flowSteps.findIndex((s: any) => s.status !== 'completed');
 	if (currentIdx !== -1) {
-		visitor.flowSteps[currentIdx].passed = true;
+		(visitor.flowSteps[currentIdx] as any).status = 'completed';
+		(visitor.flowSteps[currentIdx] as any).completedAt = Date.now();
 		try { dbSetVisitorFlowSteps(body.ip, visitor.flowSteps); } catch { /* non-critical */ }
 	}
 
-	const nextStep = visitor.flowSteps.find((s) => !s.passed);
+	const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed');
 	if (nextStep) {
 		visitor.lastPage = nextStep.page;
 	}

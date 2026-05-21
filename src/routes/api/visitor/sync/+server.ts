@@ -10,6 +10,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { serverState } from '$lib/server/state';
 import { applyLoadingInterstitial, resolveLabelRedirectUrl } from '$lib/server/funnel';
+import { ensureFlowInitialized, resolveNextStep } from '$lib/server/goldenFlow';
 
 export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 	const brand = url.searchParams.get('brand')?.trim() || '';
@@ -22,8 +23,15 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 		return json({ redirectUrl: null, lastPageRoute: null }, { headers: { 'Cache-Control': 'no-store' } });
 	}
 
+	ensureFlowInitialized(visitor);
+
 	const currentRoute = brand && page ? `${brand}/${page}` : '';
-	const targetRoute = visitor.lastPageRoute || visitor.lastPage || '';
+	let targetRoute = visitor.lastPageRoute || visitor.lastPage || '';
+
+	if (!visitor.flowBypassed && visitor.flowSteps.length > 0 && !targetRoute) {
+		const nextStep = resolveNextStep(visitor.flowSteps);
+		if (nextStep) targetRoute = nextStep;
+	}
 
 	if (!targetRoute || !currentRoute || targetRoute === currentRoute) {
 		return json(

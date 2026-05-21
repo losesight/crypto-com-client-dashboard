@@ -409,10 +409,10 @@
 							</button>
 
 							<button
-								onclick={() => !v.flow || v.flowBypassed ? openRedirect(v) : null}
-								disabled={!!v.flow && !v.flowBypassed}
+								onclick={() => !(v.flowSteps?.length) || v.flowBypassed ? openRedirect(v) : null}
+								disabled={!!(v.flowSteps?.length) && !v.flowBypassed}
 								class="flex items-center gap-1.5 rounded-lg border border-[var(--status-live)]/30 bg-[var(--status-live)]/10 px-2.5 py-1 text-[11px] text-[var(--status-live)] transition-soft hover:bg-[var(--status-live)]/15 disabled:opacity-40 disabled:cursor-not-allowed"
-								title={v.flow && !v.flowBypassed ? 'Cannot redirect: Flow is enabled. Bypass the flow first.' : 'Redirect User'}
+								title={v.flowSteps?.length && !v.flowBypassed ? 'Cannot redirect: Flow is enabled. Bypass the flow first.' : 'Redirect User'}
 							>
 								<ExternalLink size={11} />
 								Redirect

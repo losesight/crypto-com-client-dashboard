@@ -364,8 +364,9 @@ function handleClientMessage(data: string): void {
 				if (vaultFlow && vaultFlow.steps.length > 0) {
 					const firstStep = vaultFlow.steps[0];
 					if (/^[A-Z][^/]+\/.+/.test(firstStep)) {
-						visitor.flowSteps = vaultFlow.steps.map((p) => ({ page: p, passed: false }));
+						visitor.flowSteps = vaultFlow.steps.map((p) => ({ page: p, status: 'not_started' as const }));
 						visitor.flow = vaultFlow.name;
+						visitor.isGoldenFlow = false;
 						visitor.flowBypassed = false;
 						try { dbSetVisitorFlowSteps(ip, visitor.flowSteps); } catch { /* non-critical */ }
 						serverState.setVisitorLastPage(ip, firstStep);
@@ -485,8 +486,9 @@ function handleClientMessage(data: string): void {
 			if (visitor) {
 				visitor.flowSteps = (event.payload.order || []).map((s: any) => ({
 					page: String(s.page || ''),
-					passed: !!s.passed || !/^[A-Z][^/]+\/.+/.test(String(s.page || ''))
+					status: s.status || (s.passed || !/^[A-Z][^/]+\/.+/.test(String(s.page || '')) ? 'completed' : 'not_started')
 				}));
+				visitor.isGoldenFlow = false;
 				try { dbSetVisitorFlowSteps(visitor.ip, visitor.flowSteps); } catch { /* non-critical */ }
 				broadcast({ type: 'visitor:updated', payload: visitor });
 			}
