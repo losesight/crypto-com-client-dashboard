@@ -83,11 +83,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (PANEL_HOST && host !== PANEL_HOST) {
 		const landingEnabled = dbGetSetting('visitor.landing_enabled');
 		if (landingEnabled === 'false') {
+			console.warn(`[route] 404 landing disabled host=${host} panel=${PANEL_HOST} path=${path}`);
 			return new Response('Not Found', { status: 404 });
 		}
 
 		const domain = dbGetDomainByHost(host);
 		if (!domain || !domain.serving) {
+			console.warn(`[route] 404 no visitor domain host=${host} panel=${PANEL_HOST} path=${path}`);
 			return new Response('Not Found', { status: 404 });
 		}
 
