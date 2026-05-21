@@ -40,3 +40,22 @@ npm run build
 You can preview the production build with `npm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+
+## Deployment: panel vs visitor domains
+
+This app serves two roles from one Node process:
+
+- **Admin panel** — only on the hostname set in `PANEL_HOST` (e.g. `345235fgdfgdgdgdgd.shop`). Login, dashboard, and all operator routes live here.
+- **Visitor pages** — any hostname registered in the Domains tab (e.g. `972163.com`). Paths like `/loading` render the matching visitor template. The admin panel is never exposed on these domains.
+
+Copy `.env.example` to `.env` and set `PANEL_HOST` to your panel domain before building:
+
+```sh
+cp .env.example .env
+# edit PANEL_HOST=your-panel-domain.shop
+# If behind Cloudflare, also set ADDRESS_HEADER=CF-Connecting-IP
+npm run build
+node build/index.js
+```
+
+When `PANEL_HOST` is unset, all hostnames use the admin-panel behavior (useful for local dev on `localhost`).

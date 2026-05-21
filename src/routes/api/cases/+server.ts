@@ -20,6 +20,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		module?: string;
 		targetPage?: string;
 		expiresAt?: number;
+		flowId?: string;
 	};
 
 	const rawCode = (body.code || '').toString().trim();
@@ -36,7 +37,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		active: true,
 		ownerUsername: locals.user.username,
 		createdAt: Date.now(),
-		expiresAt: typeof body.expiresAt === 'number' && body.expiresAt > 0 ? body.expiresAt : 0
+		expiresAt: typeof body.expiresAt === 'number' && body.expiresAt > 0 ? body.expiresAt : 0,
+		flowId: (body.flowId || '').toString().slice(0, 64)
 	});
 
 	return json({ ok: true, code: created });

@@ -25,7 +25,9 @@
 
 	let { children } = $props();
 
-	let isFullscreenRoute = $derived($page.url.pathname.startsWith('/login'));
+	let isFullscreenRoute = $derived(
+		$page.url.pathname.startsWith('/login') || $page.url.pathname.startsWith('/signup')
+	);
 
 	onMount(() => {
 		loadAppearance();
@@ -34,7 +36,12 @@
 		applyFont($displayFont);
 		initAudio();
 		loadVisitorSettings();
-		connectWebSocket();
+	});
+
+	$effect(() => {
+		if ($page.data.user) {
+			connectWebSocket();
+		}
 	});
 
 	$effect(() => applyTheme($themeId));

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { X, Send, Trash2 } from 'lucide-svelte';
-	import { chatMessages, sendMessage } from '$lib/stores/websocket';
+	import { chatMessages, sendMessage, connected } from '$lib/stores/websocket';
 	import { onMount } from 'svelte';
 
 	let { onclose }: { onclose: () => void } = $props();
@@ -75,10 +75,12 @@
 				bind:value={messageText}
 				onkeydown={handleKeydown}
 				type="text"
-				placeholder="Type a message..."
-				class="flex-1 rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none"
+				placeholder={$connected ? 'Type a message...' : 'Disconnected...'}
+				disabled={!$connected}
+				aria-label="Team chat message"
+				class="flex-1 rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
 			/>
-			<button onclick={send} aria-label="Send message" title="Send" class="rounded-lg bg-[var(--accent-primary)] p-2 text-white transition-all hover:scale-105">
+			<button onclick={send} disabled={!$connected} aria-label="Send message" title="Send" class="rounded-lg bg-[var(--accent-primary)] p-2 text-white transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
 				<Send size={14} />
 			</button>
 		</div>

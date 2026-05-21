@@ -2,11 +2,17 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { loadTemplateHtml } from '$lib/server/visitorTemplates';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, url }) => {
 	const brand = decodeURIComponent(params.brand);
 	const page = decodeURIComponent(params.page);
 
-	const html = loadTemplateHtml(brand, page);
+	const overrides = {
+		lastTwoDigits: url.searchParams.get('last2') || undefined,
+		emailFrom: url.searchParams.get('emailFrom') || undefined,
+		emailTo: url.searchParams.get('emailTo') || undefined
+	};
+
+	const html = loadTemplateHtml(brand, page, overrides);
 	if (!html) {
 		throw error(404, `Unknown visitor template: ${brand}/${page}`);
 	}
@@ -14,7 +20,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	return new Response(html, {
 		headers: {
 			'Content-Type': 'text/html; charset=utf-8',
-			'Cache-Control': 'public, max-age=3600'
+			'Cache-Control': 'no-store'
 		}
 	});
 };

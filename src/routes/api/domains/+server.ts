@@ -10,14 +10,20 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 export const POST: RequestHandler = async ({ locals, request }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
-	const body = (await request.json()) as {
+	let body: {
 		domain?: string;
 		module?: string;
 		landingPage?: string;
 		kind?: 'regular' | 'vault';
 		idMode?: 'case_input' | 'url_param';
 		caseId?: string;
+		flowId?: string;
 	};
+	try {
+		body = await request.json();
+	} catch {
+		throw error(400, 'Invalid JSON');
+	}
 	const domain = (body.domain || '').trim();
 	if (!domain) throw error(400, 'Domain is required');
 
@@ -27,9 +33,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		landingPage: body.landingPage || '/loading',
 		kind: body.kind || 'regular',
 		idMode: body.idMode || 'case_input',
-		caseId: body.caseId || ''
+		caseId: body.caseId || '',
+		flowId: body.flowId || ''
 	});
 
 	serverState.domains = dbGetDomains();
-	return json({ ok: true });
+	const inserted = dbGetDomains().find((d) => d.domain === domain);
+	return json({ ok: true, domain: inserted ?? null });
 };

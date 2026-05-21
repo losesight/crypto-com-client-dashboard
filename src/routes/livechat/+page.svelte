@@ -14,6 +14,15 @@
 	import { connected, sendMessage, livechatEvent } from '$lib/stores/websocket';
 	import ConnectionBadge from '$lib/components/ConnectionBadge.svelte';
 	import { timeAgo } from '$lib/utils/time';
+	import { toast } from '$lib/stores/toast';
+
+	function wsSend(type: string, payload: unknown) {
+		if (!sendMessage(type, payload)) {
+			toast.error('Not connected to server');
+			return false;
+		}
+		return true;
+	}
 
 	interface Conversation {
 		id: string;
@@ -128,7 +137,7 @@
 	function send() {
 		const text = composeText.trim();
 		if (!text || !selectedIp) return;
-		sendMessage('livechat:operator:send', { ip: selectedIp, body: text });
+		if (!wsSend('livechat:operator:send', { ip: selectedIp, body: text })) return;
 		composeText = '';
 	}
 

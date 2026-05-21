@@ -30,9 +30,11 @@ data/*
 *.db
 *.db-shm
 *.db-wal
+*.tar.gz
 
 # Dev-only screenshots / scratch
 _review/
+downloaded-panel/
 
 # Local secrets / dev artifacts
 cookies.txt

@@ -1,35 +1,78 @@
 <script lang="ts">
-	import { User, Save, RefreshCw, Key } from 'lucide-svelte';
+	import { User, Save, RefreshCw } from 'lucide-svelte';
 	import { page } from '$app/stores';
+	import { invalidateAll } from '$app/navigation';
 	import { sendMessage } from '$lib/stores/websocket';
 	import { toast } from '$lib/stores/toast';
 
-	let username = $derived($page.data.user?.username ?? '');
+	let editUsername = $state('');
 	let role = $derived($page.data.user?.role ?? '');
 	let roleLabel = $derived(role ? role.charAt(0).toUpperCase() + role.slice(1) : '');
-	let initial = $derived((username || '?').charAt(0).toUpperCase());
+	let initial = $derived((editUsername || '?').charAt(0).toUpperCase());
 	let password = $state('');
 	let saving = $state(false);
 	let rotatingKey = $state(false);
 
-	function saveProfile() {
-		if (!password.trim()) return;
+	const savedUsername = $derived($page.data.user?.username ?? '');
+	const usernameDirty = $derived(editUsername.trim() !== savedUsername);
+	const passwordValid = $derived(password.trim().length === 0 || password.trim().length >= 8);
+	const canSave = $derived((usernameDirty || password.trim().length >= 8) && passwordValid && !saving);
+
+	$effect(() => {
+		editUsername = savedUsername;
+	});
+
+	async function saveProfile() {
+		if (!canSave) return;
 		saving = true;
-		sendMessage('profile:update', { password: password.trim() });
-		setTimeout(() => {
-			saving = false;
+		try {
+			const body: { username?: string; password?: string } = {};
+			if (usernameDirty) body.username = editUsername.trim();
+			if (password.trim()) body.password = password.trim();
+
+			const res = await fetch('/api/auth/profile', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(data.message || 'Failed to update profile');
+				return;
+			}
+
+			if (password.trim()) {
+				sendMessage('profile:update', { password: password.trim() });
+			}
+			if (usernameDirty) {
+				sendMessage('profile:update', { username: editUsername.trim() });
+			}
+
 			password = '';
-			toast.success('Password updated');
-		}, 1000);
+			await invalidateAll();
+			toast.success('Profile updated');
+		} catch {
+			toast.error('Failed to update profile');
+		} finally {
+			saving = false;
+		}
 	}
 
-	function rotatePhishKey() {
+	async function rotatePhishKey() {
 		rotatingKey = true;
-		sendMessage('profile:rotate-key', {});
-		setTimeout(() => {
+		try {
+			const res = await fetch('/api/auth/profile/rotate-phish-key', { method: 'POST' });
+			if (res.ok) {
+				toast.success('All domain phish keys rotated');
+			} else {
+				const data = await res.json().catch(() => ({}));
+				toast.error(data.message || 'Failed to rotate keys');
+			}
+		} catch {
+			toast.error('Network error');
+		} finally {
 			rotatingKey = false;
-			toast.success('Phish key rotated');
-		}, 1000);
+		}
 	}
 </script>
 
@@ -58,36 +101,42 @@
 						{initial}
 					</div>
 					<div>
-						<p class="text-base font-semibold text-[var(--foreground)]">{username || '—'}</p>
+						<p class="text-base font-semibold text-[var(--foreground)]">{editUsername || '—'}</p>
 						<p class="text-sm text-[var(--muted-foreground)]">{roleLabel || '—'}</p>
 					</div>
 				</div>
 
 				<div class="space-y-5">
 					<div>
-						<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Username</label>
+						<label for="profile-username" class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Username</label>
 						<input
+							id="profile-username"
 							type="text"
-							value={username}
-							disabled
-							class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)]/50 px-4 py-2.5 text-sm text-[var(--muted-foreground)] opacity-60"
-						/>
-					</div>
-
-					<div>
-						<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Password</label>
-						<input
-							bind:value={password}
-							type="password"
-							placeholder="New password"
+							bind:value={editUsername}
+							autocomplete="username"
 							class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]"
 						/>
 					</div>
 
+					<div>
+						<label for="profile-password" class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Password</label>
+						<input
+							id="profile-password"
+							bind:value={password}
+							type="password"
+							placeholder="New password (optional)"
+							autocomplete="new-password"
+							class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]"
+						/>
+						{#if password.trim().length > 0 && password.trim().length < 8}
+							<p class="mt-1 text-[11px] text-[var(--destructive)]">Password must be at least 8 characters</p>
+						{/if}
+					</div>
+
 					<button
 						onclick={saveProfile}
-						disabled={!password.trim() || saving}
-						title={!password.trim() ? 'Enter a new password to enable saving' : 'Save profile'}
+						disabled={!canSave}
+						title={!canSave ? 'Change your username or enter a new password to save' : 'Save profile'}
 						aria-label="Save profile"
 						class="btn-accent flex w-full items-center justify-center gap-2 px-4 py-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
 					>

@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
-		secure: false,
+		secure: process.env.NODE_ENV === 'production',
 		maxAge: Math.floor(SESSION_TTL_MS / 1000)
 	});
 

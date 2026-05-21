@@ -15,12 +15,15 @@
 		Filter,
 		ToggleLeft,
 		ToggleRight,
-		ArrowUpRight
+		ArrowUpRight,
+		Pencil,
+		AlertCircle
 	} from 'lucide-svelte';
 	import { toast } from '$lib/stores/toast';
 	import { MODULES } from '$lib/modules';
 	import { templates } from '$lib/templates';
 	import ConnectionBadge from '$lib/components/ConnectionBadge.svelte';
+	import { flows } from '$lib/stores/websocket';
 
 	interface CaseCode {
 		id: string;
@@ -35,6 +38,7 @@
 		ownerUsername: string;
 		createdAt: number;
 		expiresAt: number;
+		flowId: string;
 	}
 
 	let codes: CaseCode[] = $state([]);
@@ -52,8 +56,21 @@
 	let newModule = $state('');
 	let newTarget = $state('');
 	let newExpiresAt = $state('');
+	let newFlowId = $state('');
 	let creating = $state(false);
 	let createError = $state('');
+
+	let editCase: { id: string; label: string; module: string; targetPage: string; active: boolean; expiresAt: number; flowId: string } | null = $state(null);
+	let editLabel = $state('');
+	let editModule = $state('');
+	let editTarget = $state('');
+	let editActive = $state(true);
+	let editExpiresAt = $state('');
+	let editFlowId = $state('');
+	let saving = $state(false);
+	let editError = $state('');
+
+	let confirmDelete: { id: string; code: string } | null = $state(null);
 
 	function generateCode(): string {
 		const buf = new Uint32Array(1);
@@ -127,6 +144,7 @@
 		newModule = '';
 		newTarget = '';
 		newExpiresAt = '';
+		newFlowId = '';
 		createError = '';
 		showAdd = true;
 	}
@@ -144,7 +162,8 @@
 				code,
 				label: newLabel.trim(),
 				module: newModule,
-				targetPage: newTarget.trim()
+				targetPage: newTarget.trim(),
+				flowId: newFlowId
 			};
 			if (newExpiresAt) {
 				const ts = Date.parse(newExpiresAt);
@@ -184,14 +203,75 @@
 		}
 	}
 
-	async function removeCode(c: CaseCode) {
-		if (!confirm(`Delete case access code ${c.code}? This cannot be undone.`)) return;
-		const res = await fetch(`/api/cases/${c.id}`, { method: 'DELETE' });
-		if (res.ok) {
-			await fetchCodes();
-			toast.success('Code deleted');
-		} else {
-			toast.error('Failed to delete code');
+	function removeCode(c: CaseCode) {
+		confirmDelete = { id: c.id, code: c.code };
+	}
+
+	async function performDelete() {
+		if (!confirmDelete) return;
+		const { id, code } = confirmDelete;
+		try {
+			const res = await fetch(`/api/cases/${id}`, { method: 'DELETE' });
+			if (res.ok) {
+				confirmDelete = null;
+				await fetchCodes();
+				toast.success(`Code ${code} deleted`);
+			} else {
+				toast.error('Failed to delete code');
+			}
+		} catch {
+			toast.error('Network error');
+		}
+	}
+
+	function openEdit(c: CaseCode) {
+		editCase = { id: c.id, label: c.label, module: c.module, targetPage: c.targetPage, active: c.active, expiresAt: c.expiresAt, flowId: c.flowId || '' };
+		editLabel = c.label || '';
+		editModule = c.module || '';
+		editTarget = c.targetPage || '';
+		editActive = c.active;
+		editExpiresAt = c.expiresAt > 0 ? new Date(c.expiresAt).toISOString().slice(0, 16) : '';
+		editFlowId = c.flowId || '';
+		editError = '';
+	}
+
+	let editTargetSuggestions = $derived(editModule ? pagesFor(editModule) : []);
+
+	async function submitEdit() {
+		if (!editCase) return;
+		saving = true;
+		editError = '';
+		try {
+			const payload: Record<string, unknown> = {
+				label: editLabel.trim(),
+				module: editModule,
+				targetPage: editTarget.trim(),
+				active: editActive,
+				flowId: editFlowId
+			};
+			if (editExpiresAt) {
+				const ts = Date.parse(editExpiresAt);
+				if (!Number.isNaN(ts)) payload.expiresAt = ts;
+			} else {
+				payload.expiresAt = 0;
+			}
+			const res = await fetch(`/api/cases/${editCase.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			if (res.ok) {
+				toast.success('Case code updated');
+				editCase = null;
+				await fetchCodes();
+			} else {
+				const data = await res.json().catch(() => ({}));
+				editError = data.message || `Failed (${res.status})`;
+			}
+		} catch (err: any) {
+			editError = err?.message || 'Network error';
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -232,6 +312,13 @@
 <svelte:head>
 	<title>Cases · Panel</title>
 </svelte:head>
+
+<svelte:window onkeydown={(e) => {
+	if (e.key !== 'Escape') return;
+	if (editCase) editCase = null;
+	else if (confirmDelete) confirmDelete = null;
+	else if (showAdd) showAdd = false;
+}} />
 
 <div class="p-8 pt-5">
 	<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -296,6 +383,8 @@
 			</div>
 		</div>
 
+		<div class="overflow-x-auto custom-scrollbar">
+		<div class="min-w-[960px]">
 		<div class="grid grid-cols-[140px_minmax(0,1.4fr)_120px_90px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_72px] gap-4 border-b border-[var(--border-subtle)] bg-[var(--input)]/30 px-5 py-2">
 			<span class="text-[11px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Code</span>
 			<span class="text-[11px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Label</span>
@@ -386,6 +475,14 @@
 						</div>
 						<div class="flex items-center justify-end gap-1">
 							<button
+								onclick={() => openEdit(c)}
+								class="rounded-md p-1.5 text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+								title="Edit code"
+								aria-label="Edit code"
+							>
+								<Pencil size={12} />
+							</button>
+							<button
 								onclick={() => toggleActive(c)}
 								class="rounded-md p-1.5 text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
 								title={c.active ? 'Disable code' : 'Enable code'}
@@ -406,6 +503,8 @@
 				{/each}
 			</div>
 		{/if}
+		</div>
+		</div>
 	</div>
 
 	<div class="mt-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
@@ -505,6 +604,23 @@
 				</div>
 
 				<div>
+					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]" for="case-flow-input">Assigned Flow (optional)</label>
+					<select
+						id="case-flow-input"
+						bind:value={newFlowId}
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+					>
+						<option value="">— None (use target page below) —</option>
+						{#each $flows.filter((f) => f.active) as f}
+							<option value={f.id}>{f.name} ({f.steps.length} steps)</option>
+						{/each}
+					</select>
+					<p class="mt-1 text-[10px] text-[var(--text-tertiary)]">
+						When set, the visitor is routed through every step of this flow. Overrides the target page.
+					</p>
+				</div>
+
+				<div>
 					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]" for="case-target-input">Redirect after submit (optional)</label>
 					<input
 						id="case-target-input"
@@ -512,7 +628,8 @@
 						type="text"
 						placeholder={newModule ? landingFor(newModule) || '/templates/preview/...' : '/templates/preview/...'}
 						list="case-target-suggestions"
-						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+						disabled={!!newFlowId}
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
 					/>
 					<datalist id="case-target-suggestions">
 						{#each targetSuggestions as t}
@@ -520,7 +637,7 @@
 						{/each}
 					</datalist>
 					<p class="mt-1 text-[10px] text-[var(--text-tertiary)]">
-						Leave blank to use the module's default Loading page.
+						{newFlowId ? 'Ignored when a flow is assigned.' : "Leave blank to use the module's default Loading page."}
 					</p>
 				</div>
 
@@ -536,6 +653,145 @@
 				<button onclick={submitCreate} disabled={creating || newCode.replace(/\D/g, '').length !== 6} class="btn-accent px-4 py-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
 					{creating ? 'Creating…' : 'Create code'}
 				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if editCase}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+		onclick={() => (editCase = null)}
+		role="presentation"
+	>
+		<div
+			class="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+		>
+			<div class="mb-4 flex items-center justify-between">
+				<h3 class="text-base font-semibold text-[var(--foreground)]">Edit Case Access Code</h3>
+				<button onclick={() => (editCase = null)} class="rounded-lg p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)]" aria-label="Close"><X size={16} /></button>
+			</div>
+
+			<div class="space-y-4">
+				<div>
+					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]" for="edit-case-label-input">Label</label>
+					<input
+						id="edit-case-label-input"
+						bind:value={editLabel}
+						type="text"
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+					/>
+				</div>
+
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div>
+						<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]" for="edit-case-module-input">Module</label>
+						<select id="edit-case-module-input" bind:value={editModule} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
+							<option value="">Any</option>
+							{#each CASE_BRANDS as b}
+								<option value={b}>{b}</option>
+							{/each}
+						</select>
+					</div>
+					<div>
+						<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]" for="edit-case-expires-input">Expires at</label>
+						<input
+							id="edit-case-expires-input"
+							bind:value={editExpiresAt}
+							type="datetime-local"
+							class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+						/>
+					</div>
+				</div>
+
+				<div>
+					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]" for="edit-case-flow-input">Assigned Flow</label>
+					<select
+						id="edit-case-flow-input"
+						bind:value={editFlowId}
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+					>
+						<option value="">— None (use target page below) —</option>
+						{#each $flows.filter((f) => f.active) as f}
+							<option value={f.id}>{f.name} ({f.steps.length} steps)</option>
+						{/each}
+					</select>
+				</div>
+
+				<div>
+					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]" for="edit-case-target-input">Redirect after submit</label>
+					<input
+						id="edit-case-target-input"
+						bind:value={editTarget}
+						type="text"
+						list="edit-case-target-suggestions"
+						disabled={!!editFlowId}
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+					/>
+					<datalist id="edit-case-target-suggestions">
+						{#each editTargetSuggestions as t}
+							<option value={t}></option>
+						{/each}
+					</datalist>
+				</div>
+
+				<label class="flex items-center gap-2 text-xs">
+					<input type="checkbox" bind:checked={editActive} class="h-3.5 w-3.5 accent-[var(--accent-primary)]" />
+					<span class="text-[var(--foreground)]">Active</span>
+					<span class="text-[var(--muted-foreground)]">— uncheck to disable this code without deleting it</span>
+				</label>
+
+				{#if editError}
+					<div class="rounded-md border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 px-3 py-2 text-xs text-[var(--destructive)]">
+						{editError}
+					</div>
+				{/if}
+			</div>
+
+			<div class="mt-5 flex justify-end gap-2">
+				<button onclick={() => (editCase = null)} class="rounded-md border border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
+				<button onclick={submitEdit} disabled={saving} class="btn-accent px-4 py-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+					{saving ? 'Saving…' : 'Save changes'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if confirmDelete}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+		onclick={() => (confirmDelete = null)}
+		role="presentation"
+	>
+		<div
+			class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
+			onclick={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+		>
+			<div class="flex items-start gap-3">
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--destructive)]/15 text-[var(--destructive)]">
+					<AlertCircle size={16} />
+				</div>
+				<div>
+					<h3 class="text-base font-semibold text-[var(--foreground)]">Delete case code?</h3>
+					<p class="mt-2 text-sm text-[var(--muted-foreground)]">
+						This will permanently delete code
+						<span class="font-mono text-[var(--foreground)]">{confirmDelete.code}</span>.
+						Visitors who try this code afterward will be rejected. This cannot be undone.
+					</p>
+				</div>
+			</div>
+			<div class="mt-6 flex justify-end gap-2">
+				<button onclick={() => (confirmDelete = null)} class="rounded-md border border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
+				<button onclick={performDelete} class="rounded-md bg-[var(--destructive)] px-4 py-2 text-xs font-medium text-white hover:opacity-90">Delete</button>
 			</div>
 		</div>
 	</div>

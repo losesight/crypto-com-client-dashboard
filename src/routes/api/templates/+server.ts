@@ -1,17 +1,8 @@
 import type { RequestHandler } from './$types';
 import { json, error } from '@sveltejs/kit';
 import { dbGetTemplates, dbInsertTemplate } from '$lib/server/database.js';
+import { extractTemplateVariables } from '$lib/mailVariables.js';
 import crypto from 'node:crypto';
-
-function extractVariables(html: string): string[] {
-	const found = new Set<string>();
-	const re = /\{\{\s*([^{}]+?)\s*\}\}/g;
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(html)) !== null) {
-		found.add(`{{${m[1].trim()}}}`);
-	}
-	return [...found];
-}
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
@@ -30,7 +21,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	if (!name) throw error(400, 'Name required');
 
 	const html = body.html || '';
-	const variables = extractVariables(html);
+	const variables = extractTemplateVariables(html);
 	const slug =
 		name
 			.toLowerCase()

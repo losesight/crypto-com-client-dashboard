@@ -17,7 +17,7 @@
 <button
 	onclick={() => onsort(column)}
 	class="flex w-full items-center gap-1 text-left text-[11px] font-medium uppercase tracking-wider text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-soft"
-	aria-label="Sort by {label} {isActive && direction === 'asc' ? 'descending' : 'ascending'}"
+	aria-label={isActive ? `Sort by ${label} ${direction === 'asc' ? 'descending' : 'ascending'}` : `Sort by ${label}`}
 >
 	<span>{label}</span>
 	{#if !isActive}

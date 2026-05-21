@@ -1,27 +1,23 @@
 <script lang="ts">
 	import { Inbox, Plus, RefreshCw, Mail, Trash2, HardDrive } from 'lucide-svelte';
-	import { sendMessage } from '$lib/stores/websocket';
+	import { inboxAccounts, sendMessage } from '$lib/stores/websocket';
+	import { toast } from '$lib/stores/toast';
 
-	interface EmailAccount {
-		id: string;
-		email: string;
-		provider: string;
-		connected: boolean;
-		messageCount: number;
-		storageUsed: number;
-	}
-
-	let accounts: EmailAccount[] = $state([]);
 	let selectedAccount = $state('');
 	let showAddDialog = $state(false);
 	let newEmail = $state('');
-	let newPassword = $state('');
-	let newImapHost = $state('');
-	let newImapPort = $state('993');
 
 	let storageLimit = 15 * 1024 * 1024 * 1024;
-	let totalStorageUsed = $derived(accounts.reduce((sum, a) => sum + a.storageUsed, 0));
+	let totalStorageUsed = $derived($inboxAccounts.reduce((sum, a) => sum + (a.storageUsed ?? 0), 0));
 	let storagePercent = $derived(Math.min((totalStorageUsed / storageLimit) * 100, 100));
+
+	function wsSend(type: string, payload: unknown) {
+		if (!sendMessage(type, payload)) {
+			toast.error('Not connected to server');
+			return false;
+		}
+		return true;
+	}
 
 	function formatBytes(bytes: number): string {
 		if (bytes === 0) return '0 Bytes';
@@ -33,26 +29,13 @@
 
 	function addAccount() {
 		if (!newEmail.trim()) return;
-		const account: EmailAccount = {
-			id: crypto.randomUUID(),
-			email: newEmail.trim(),
-			provider: newEmail.includes('gmail') ? 'Gmail' : newEmail.includes('outlook') ? 'Outlook' : 'IMAP',
-			connected: true,
-			messageCount: 0,
-			storageUsed: 0
-		};
-		accounts = [...accounts, account];
-		sendMessage('inbox:add', { email: account.email, imapHost: newImapHost, imapPort: parseInt(newImapPort) });
+		wsSend('inbox:add', { email: newEmail.trim() });
 		newEmail = '';
-		newPassword = '';
-		newImapHost = '';
-		newImapPort = '993';
 		showAddDialog = false;
 	}
 
 	function removeAccount(id: string) {
-		accounts = accounts.filter((a) => a.id !== id);
-		sendMessage('inbox:remove', { id });
+		wsSend('inbox:remove', { id });
 	}
 
 	function refresh() {
@@ -81,17 +64,17 @@
 						<p class="text-sm font-semibold text-[var(--foreground)]">Email Accounts</p>
 					</div>
 					<div class="flex items-center gap-2">
-						<select
-							bind:value={selectedAccount}
-							disabled={accounts.length === 0}
-							aria-label="Select email account"
-							class="rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-						>
-							<option value="">{accounts.length === 0 ? 'No accounts' : 'Select account...'}</option>
-							{#each accounts as account}
-								<option value={account.id}>{account.email}</option>
-							{/each}
-						</select>
+					<select
+						bind:value={selectedAccount}
+						disabled={$inboxAccounts.length === 0}
+						aria-label="Select email account"
+						class="rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						<option value="">{$inboxAccounts.length === 0 ? 'No accounts' : 'Select account...'}</option>
+						{#each $inboxAccounts as account}
+							<option value={account.id}>{account.email}</option>
+						{/each}
+					</select>
 						<button onclick={() => (showAddDialog = true)} class="btn-accent flex items-center gap-1.5 px-3 py-2 text-xs">
 							<Plus size={13} />
 							Add account
@@ -102,15 +85,15 @@
 					</div>
 				</div>
 
-				{#if accounts.length === 0}
-					<div class="flex flex-col items-center justify-center py-20 text-center">
-						<Mail size={40} class="mb-3 text-[var(--text-tertiary)]" />
-						<p class="text-sm font-semibold text-[var(--foreground)]">No email accounts</p>
-						<p class="mt-1 text-xs text-[var(--muted-foreground)]">Add an email account to start filtering</p>
-					</div>
-				{:else}
-					<div class="max-h-[50vh] overflow-y-auto custom-scrollbar divide-y divide-[var(--border-subtle)]">
-						{#each accounts as account (account.id)}
+			{#if $inboxAccounts.length === 0}
+				<div class="flex flex-col items-center justify-center py-20 text-center">
+					<Mail size={40} class="mb-3 text-[var(--text-tertiary)]" />
+					<p class="text-sm font-semibold text-[var(--foreground)]">No email accounts</p>
+					<p class="mt-1 text-xs text-[var(--muted-foreground)]">Add an email account to start filtering</p>
+				</div>
+			{:else}
+				<div class="max-h-[50vh] overflow-y-auto custom-scrollbar divide-y divide-[var(--border-subtle)]">
+					{#each $inboxAccounts as account (account.id)}
 							<div class="transition-soft-no-bg p-5 hover:bg-[var(--accent)]/30">
 								<div class="flex items-center justify-between">
 									<div class="flex items-center gap-3">
@@ -151,9 +134,9 @@
 				</div>
 				<div class="p-5">
 					<div class="flex flex-col items-center justify-center py-8 text-center">
-						<p class="text-sm font-semibold text-[var(--foreground)]">
-							{selectedAccount ? accounts.find(a => a.id === selectedAccount)?.email : 'No email selected'}
-						</p>
+					<p class="text-sm font-semibold text-[var(--foreground)]">
+						{selectedAccount ? $inboxAccounts.find(a => a.id === selectedAccount)?.email : 'No email selected'}
+					</p>
 						<p class="mt-2 text-xs text-[var(--muted-foreground)]">
 							{formatBytes(totalStorageUsed)} / 15 GB
 						</p>
@@ -174,25 +157,11 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (showAddDialog = false)}>
 		<div class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-lg" onclick={(e) => e.stopPropagation()}>
 			<h3 class="text-base font-semibold text-[var(--foreground)]">Add Email Account</h3>
-			<p class="mt-1 text-sm text-[var(--muted-foreground)]">Connect an email account for inbox filtering</p>
+			<p class="mt-1 text-sm text-[var(--muted-foreground)]">Add an email account for inbox filtering</p>
 			<div class="mt-5 space-y-4">
 				<div>
 					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Email Address</label>
 					<input bind:value={newEmail} type="email" placeholder="you@example.com" class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]" />
-				</div>
-				<div>
-					<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Password / App Password</label>
-					<input bind:value={newPassword} type="password" placeholder="••••••••" class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]" />
-				</div>
-				<div class="grid grid-cols-2 gap-3">
-					<div>
-						<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">IMAP Host</label>
-						<input bind:value={newImapHost} type="text" placeholder="imap.gmail.com" class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]" />
-					</div>
-					<div>
-						<label class="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Port</label>
-						<input bind:value={newImapPort} type="number" class="w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]" />
-					</div>
 				</div>
 			</div>
 			<div class="mt-6 flex justify-end gap-3">

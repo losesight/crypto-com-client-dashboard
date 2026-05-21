@@ -7,7 +7,8 @@ export const POST: RequestHandler = async ({ locals }) => {
 	const cfg = getTelegramConfig();
 	const result = await sendTelegram(
 		`\u{2705} <b>Panel test</b>\nThis is a test message from your panel.\nOperator: ${locals.user.username}`,
-		cfg
+		cfg,
+		{ skipEnabledCheck: true }
 	);
 	return json(result);
 };

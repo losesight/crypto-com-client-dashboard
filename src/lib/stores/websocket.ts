@@ -48,10 +48,12 @@ export const vaultEvent = writable<{ id?: string; ip?: string; deleted?: string 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-export function sendMessage(type: ClientEvent['type'], payload: unknown): void {
+export function sendMessage(type: ClientEvent['type'], payload: unknown): boolean {
 	if (ws && ws.readyState === WebSocket.OPEN) {
 		ws.send(JSON.stringify({ type, payload }));
+		return true;
 	}
+	return false;
 }
 
 function handleMessage(event: ServerEvent): void {

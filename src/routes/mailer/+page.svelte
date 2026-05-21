@@ -35,6 +35,11 @@
 	} from 'lucide-svelte';
 	import { sendMessage, mailerResult } from '$lib/stores/websocket';
 	import { toast } from '$lib/stores/toast';
+	import {
+		extractTemplateVariables,
+		replaceTemplateVariables,
+		variableLabel
+	} from '$lib/mailVariables';
 
 	interface SmtpServer {
 		id: string;
@@ -114,12 +119,15 @@
 
 	let currentTemplate = $derived(templates.find((t) => t.id === selectedTemplateId));
 
+	let templateVariables = $derived.by(() => {
+		if (!currentTemplate) return [] as string[];
+		const fromHtml = extractTemplateVariables(currentTemplate.html);
+		const merged = new Set([...(currentTemplate.variables || []), ...fromHtml]);
+		return [...merged];
+	});
+
 	function getFilledHtml(html: string): string {
-		let result = html;
-		for (const [key, value] of Object.entries(variableValues)) {
-			if (value) result = result.replaceAll(key, value);
-		}
-		return result;
+		return replaceTemplateVariables(html, variableValues);
 	}
 
 	let previewHtml = $derived(
@@ -128,9 +136,15 @@
 			: '<p style="color:#888;text-align:center;padding:40px;">Select a template to preview</p>'
 	);
 
-	function cleanVariableName(v: string): string {
-		return v.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '');
-	}
+	let lastTemplateId = $state('');
+
+	$effect(() => {
+		if (!selectedTemplateId || selectedTemplateId === lastTemplateId) return;
+		lastTemplateId = selectedTemplateId;
+		variableValues = {};
+		const tmpl = templates.find((t) => t.id === selectedTemplateId);
+		if (tmpl?.subject) customSubject = tmpl.subject;
+	});
 
 	mailerResult.subscribe((result) => {
 		if (!result) return;
@@ -188,7 +202,7 @@
 		const filledHtml = getFilledHtml(currentTemplate.html);
 		const filledSubject = getFilledHtml(customSubject || currentTemplate.subject || '');
 
-		sendMessage('mailer:send', {
+		if (!sendMessage('mailer:send', {
 			templateId: currentTemplate.slug,
 			recipients,
 			subject: filledSubject,
@@ -199,7 +213,11 @@
 			smtpId: selectedSmtp || undefined,
 			fullAccess: fullAccessMode,
 			sendMode
-		});
+		})) {
+			sending = false;
+			toast.error('Not connected to server');
+			return;
+		}
 	}
 
 	function addSmtp() {
@@ -279,6 +297,7 @@
 		replyTo = '';
 		variableValues = {};
 		selectedTemplateId = '';
+		lastTemplateId = '';
 	}
 
 	// --- Spam analysis (kept from previous version) ---
@@ -417,11 +436,32 @@
 </svelte:head>
 
 <div class="p-8 pt-5">
-	<div class="mb-5 flex items-start justify-between gap-3">
+	<div class="mb-5 flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-bold text-[var(--foreground)]">Mailer</h1>
 			<p class="mt-1 text-sm text-[var(--muted-foreground)]">Send emails, manage SMTP servers, and protect URLs</p>
 		</div>
+		{#if activeTab === 'sender'}
+			<div class="flex flex-wrap items-center gap-2">
+				<button onclick={clearForm} class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
+					<X size={12} />
+					Clear
+				</button>
+				<button
+					onclick={sendCampaign}
+					disabled={sending || !selectedSmtp || !currentTemplate || smtpServers.length === 0}
+					class="btn-accent flex items-center gap-2 rounded-lg px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					{#if sending}
+						<Loader size={13} class="animate-spin" />
+						Sending...
+					{:else}
+						<Send size={13} />
+						{fullAccessMode ? 'Append to inbox' : 'Send Email'}
+					{/if}
+				</button>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Tabs -->
@@ -444,16 +484,12 @@
 
 	{#if activeTab === 'sender'}
 		<!-- ============= EMAIL SENDER ============= -->
-		<div class="grid gap-4 xl:grid-cols-12">
-			<!-- LEFT: compose + preview -->
-			<div class="xl:col-span-7 space-y-4">
-				<!-- Top action bar -->
+		<div class="grid gap-4 xl:grid-cols-2">
+			<!-- LEFT: configuration -->
+			<div class="space-y-4">
+				<!-- Presets + send mode -->
 				<div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-2.5">
-					<div class="flex items-center gap-2">
-						<button onclick={clearForm} class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
-							<X size={11} />
-							Clear
-						</button>
+					<div class="flex flex-wrap items-center gap-2">
 						<button onclick={() => (showSavePreset = true)} class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
 							<Bookmark size={11} />
 							Save as Preset
@@ -467,7 +503,7 @@
 								{/if}
 							</button>
 							{#if presetMenuOpen}
-								<div class="absolute right-0 top-full z-30 mt-1 w-72 rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-2xl">
+								<div class="absolute left-0 top-full z-30 mt-1 w-72 rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-2xl">
 									{#if presets.length === 0}
 										<p class="px-4 py-3 text-xs text-[var(--muted-foreground)]">No saved presets yet.</p>
 									{:else}
@@ -477,7 +513,7 @@
 													<p class="truncate font-medium">{p.name}</p>
 													<p class="truncate text-[10px] text-[var(--muted-foreground)]">{p.senderEmail || 'no sender'}</p>
 												</button>
-												<button onclick={() => deletePreset(p)} class="opacity-0 group-hover:opacity-100 rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)]" aria-label="Delete preset">
+												<button onclick={() => deletePreset(p)} class="rounded p-1 text-[var(--muted-foreground)] opacity-0 hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)] group-hover:opacity-100" aria-label="Delete preset">
 													<Trash2 size={11} />
 												</button>
 											</div>
@@ -487,32 +523,19 @@
 							{/if}
 						</div>
 					</div>
-
 					<div class="flex items-center gap-2">
+						<div class="flex items-center gap-1 rounded-lg border border-[var(--border)] p-0.5">
+							<button onclick={() => (sendMode = 'smtp')} class="rounded-md px-3 py-1.5 text-xs {sendMode === 'smtp' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">Custom SMTP</button>
+							<button onclick={() => (sendMode = 'mail-server')} class="rounded-md px-3 py-1.5 text-xs {sendMode === 'mail-server' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">Mail Server</button>
+						</div>
 						<button
 							onclick={() => (fullAccessMode = !fullAccessMode)}
 							class="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-soft {fullAccessMode ? 'border-[var(--status-live)]/30 bg-[var(--status-live)]/10 text-[var(--status-live)]' : 'border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
 						>
 							{#if fullAccessMode}<ToggleRight size={12} />{:else}<ToggleLeft size={12} />{/if}
-							Full Access (IMAP)
+							Full Access
 						</button>
 					</div>
-				</div>
-
-				<!-- Send-mode toggle -->
-				<div class="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-2 w-fit">
-					<button
-						onclick={() => (sendMode = 'smtp')}
-						class="rounded-md px-3 py-1.5 text-xs {sendMode === 'smtp' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}"
-					>
-						Custom SMTP
-					</button>
-					<button
-						onclick={() => (sendMode = 'mail-server')}
-						class="rounded-md px-3 py-1.5 text-xs {sendMode === 'mail-server' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}"
-					>
-						Mail Server
-					</button>
 				</div>
 
 				<!-- Compose card -->
@@ -593,19 +616,19 @@
 							<input bind:value={replyTo} type="email" placeholder="reply@company.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
 						</div>
 
-						{#if currentTemplate && currentTemplate.variables.length > 0}
+						{#if currentTemplate && templateVariables.length > 0}
 							<div class="rounded-md border border-[var(--border)] bg-[var(--input)]/30 p-3">
 								<p class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Template Variables</p>
-								<div class="grid grid-cols-2 gap-2">
-									{#each currentTemplate.variables as v}
-										<div>
-											<label class="mb-0.5 block text-[10px] text-[var(--foreground)]">{cleanVariableName(v)}</label>
+								<div class="space-y-2">
+									{#each templateVariables as v}
+										<div class="flex items-center gap-2">
+											<span class="shrink-0 rounded bg-[var(--accent-primary)]/10 px-2 py-0.5 font-mono text-[10px] text-[var(--text-accent)]">{variableLabel(v)}</span>
 											<input
 												type="text"
-												placeholder={cleanVariableName(v)}
+												placeholder={`Enter ${variableLabel(v)}`}
 												value={variableValues[v] || ''}
 												oninput={(e) => { variableValues[v] = (e.target as HTMLInputElement).value; variableValues = { ...variableValues }; }}
-												class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+												class="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
 											/>
 										</div>
 									{/each}
@@ -655,65 +678,9 @@
 								{sendStatus.message}
 							</div>
 						{/if}
-
-						<button
-							onclick={sendCampaign}
-							disabled={sending || !selectedSmtp || !currentTemplate || smtpServers.length === 0}
-							class="btn-accent flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							{#if sending}
-								<Loader size={13} class="animate-spin" />
-								Sending...
-							{:else}
-								<Send size={13} />
-								{fullAccessMode ? 'Append to inbox' : 'Send Email'}
-							{/if}
-						</button>
 						{#if smtpServers.length === 0}
-							<p class="text-center text-[10px] text-[var(--muted-foreground)]">Add an SMTP server first to send emails →</p>
+							<p class="text-center text-[10px] text-[var(--muted-foreground)]">Add an SMTP server below to send emails</p>
 						{/if}
-					</div>
-				</div>
-			</div>
-
-			<!-- RIGHT: preview + smtp -->
-			<div class="xl:col-span-5 space-y-4">
-				<!-- Live preview -->
-				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
-					<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
-						<div class="flex items-center gap-2">
-							<Eye size={14} class="text-[var(--text-accent)]" />
-							<p class="text-sm font-semibold text-[var(--foreground)]">Live Preview</p>
-						</div>
-						<div class="flex items-center gap-1 rounded-md border border-[var(--border)] p-0.5">
-							<button onclick={() => (previewMode = 'desktop')} class="flex items-center gap-1 rounded px-2 py-1 text-[10px] {previewMode === 'desktop' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">
-								<Monitor size={10} />
-								Desktop
-							</button>
-							<button onclick={() => (previewMode = 'mobile')} class="flex items-center gap-1 rounded px-2 py-1 text-[10px] {previewMode === 'mobile' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">
-								<Smartphone size={10} />
-								Mobile
-							</button>
-						</div>
-					</div>
-					<!-- From/Subject preview row -->
-					<div class="border-b border-[var(--border-subtle)] bg-[var(--input)]/30 px-4 py-2 text-[11px]">
-						<p class="text-[var(--muted-foreground)]">
-							<span class="text-[var(--foreground)] font-medium">From:</span> {senderName || 'Sender'} &lt;{senderEmail || 'sender@example.com'}&gt;
-						</p>
-						<p class="text-[var(--muted-foreground)]">
-							<span class="text-[var(--foreground)] font-medium">Subject:</span> {customSubject || currentTemplate?.subject || '(no subject)'}
-						</p>
-						{#if replyTo}
-							<p class="text-[var(--muted-foreground)]">
-								<span class="text-[var(--foreground)] font-medium">Reply-To:</span> {replyTo}
-							</p>
-						{/if}
-					</div>
-					<div class="bg-white" style="height: 480px;">
-						<div class="h-full w-full {previewMode === 'mobile' ? 'flex items-center justify-center bg-zinc-100' : ''}">
-							<iframe srcdoc={previewHtml} title="Email Preview" class="border-0 {previewMode === 'mobile' ? 'h-[420px] w-[300px] shadow-xl' : 'h-full w-full'}" sandbox="allow-same-origin"></iframe>
-						</div>
 					</div>
 				</div>
 
@@ -743,6 +710,53 @@
 						{#if smtpServers.length === 0}
 							<p class="px-3 py-6 text-center text-xs text-[var(--muted-foreground)]">No SMTP servers configured</p>
 						{/if}
+					</div>
+				</div>
+			</div>
+
+			<!-- RIGHT: live preview -->
+			<div class="space-y-4">
+				<!-- Live preview -->
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden" style="box-shadow: var(--shadow-sm);">
+					<div class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
+						<div class="flex items-center gap-2">
+							<Eye size={14} class="text-[var(--text-accent)]" />
+							<p class="text-sm font-semibold text-[var(--foreground)]">Live Preview</p>
+						</div>
+						<div class="flex items-center gap-1 rounded-md border border-[var(--border)] p-0.5">
+							<button onclick={() => (previewMode = 'desktop')} class="flex items-center gap-1 rounded px-2 py-1 text-[10px] {previewMode === 'desktop' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">
+								<Monitor size={10} />
+								Desktop
+							</button>
+							<button onclick={() => (previewMode = 'mobile')} class="flex items-center gap-1 rounded px-2 py-1 text-[10px] {previewMode === 'mobile' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)]'}">
+								<Smartphone size={10} />
+								Mobile
+							</button>
+						</div>
+					</div>
+					<!-- From/To preview row -->
+					<div class="border-b border-[var(--border-subtle)] bg-[var(--input)]/30 px-4 py-2 text-[11px] space-y-0.5">
+						<p class="text-[var(--muted-foreground)]">
+							<span class="font-medium text-[var(--foreground)]">From:</span> {senderName || 'Sender'} &lt;{senderEmail || 'sender@example.com'}&gt;
+						</p>
+						{#if !fullAccessMode}
+							<p class="text-[var(--muted-foreground)]">
+								<span class="font-medium text-[var(--foreground)]">To:</span> {recipientList.split('\n').filter(Boolean)[0] || 'recipient@example.com'}
+							</p>
+						{/if}
+						<p class="text-[var(--muted-foreground)]">
+							<span class="font-medium text-[var(--foreground)]">Subject:</span> {getFilledHtml(customSubject || currentTemplate?.subject || '(no subject)')}
+						</p>
+						{#if replyTo}
+							<p class="text-[var(--muted-foreground)]">
+								<span class="font-medium text-[var(--foreground)]">Reply-To:</span> {replyTo}
+							</p>
+						{/if}
+					</div>
+					<div class="bg-white" style="height: 560px;">
+						<div class="h-full w-full {previewMode === 'mobile' ? 'flex items-center justify-center bg-zinc-100' : ''}">
+							<iframe srcdoc={previewHtml} title="Email Preview" class="border-0 {previewMode === 'mobile' ? 'h-[520px] w-[320px] rounded-xl shadow-xl' : 'h-full w-full'}" sandbox="allow-same-origin"></iframe>
+						</div>
 					</div>
 				</div>
 			</div>

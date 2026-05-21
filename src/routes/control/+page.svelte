@@ -1,13 +1,22 @@
 <script lang="ts">
 	import { UsersRound, Circle, Send, ArrowRight, Eye, MonitorSmartphone } from 'lucide-svelte';
 	import { visitors, flows, sendMessage } from '$lib/stores/websocket';
+	import { toast } from '$lib/stores/toast';
 
 	let selectedVisitor: string | null = $state(null);
 	let targetFlow = $state('crypto/loading');
 
+	function wsSend(type: string, payload: unknown) {
+		if (!sendMessage(type, payload)) {
+			toast.error('Not connected to server');
+			return false;
+		}
+		return true;
+	}
+
 	function pushVisitor() {
 		if (!selectedVisitor) return;
-		sendMessage('visitor:push', { ip: selectedVisitor, targetFlow });
+		wsSend('visitor:push', { ip: selectedVisitor, targetFlow });
 	}
 </script>
 

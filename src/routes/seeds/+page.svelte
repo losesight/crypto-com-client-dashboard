@@ -61,6 +61,8 @@
 				const data = await res.json();
 				rows = data.rows;
 				total = data.total;
+			} else {
+				toast.error('Failed to load seeds');
 			}
 		} finally {
 			loading = false;
@@ -226,6 +228,8 @@
 			</div>
 		</div>
 
+		<div class="overflow-x-auto custom-scrollbar">
+		<div class="min-w-[800px]">
 		<div class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_140px_100px_minmax(0,1fr)] gap-4 border-b border-[var(--border-subtle)] bg-[var(--input)]/30 px-5 py-2">
 			<SortableHeader label="IP Address" column="visitor_ip" activeColumn={sortCol} direction={sortDir} onsort={setSort} />
 			<span class="text-[11px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Seed Phrase</span>
@@ -282,6 +286,8 @@
 				{/each}
 			</div>
 		{/if}
+		</div>
+		</div>
 
 		<div class="border-t border-[var(--border)]">
 			<Pagination

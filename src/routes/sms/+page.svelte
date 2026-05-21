@@ -14,6 +14,7 @@
 		Activity
 	} from 'lucide-svelte';
 	import { timeAgo } from '$lib/utils/time';
+	import { toast } from '$lib/stores/toast';
 
 	interface Device {
 		id: string;
@@ -87,6 +88,9 @@
 			newUrl = '';
 			checkResult = null;
 			await fetchDevices();
+			toast.success('Device added');
+		} else {
+			toast.error('Failed to add device');
 		}
 	}
 
@@ -105,7 +109,12 @@
 
 	async function removeDevice(d: Device) {
 		if (!confirm(`Remove device ${d.name}?`)) return;
-		await fetch(`/api/sms/devices/${d.id}`, { method: 'DELETE' });
+		const res = await fetch(`/api/sms/devices/${d.id}`, { method: 'DELETE' });
+		if (res.ok) {
+			toast.success(`Removed device ${d.name}`);
+		} else {
+			toast.error('Failed to remove device');
+		}
 		if (selectedId === d.id) selectedId = null;
 		await fetchDevices();
 	}
@@ -124,6 +133,8 @@
 <svelte:head>
 	<title>SMS · Panel</title>
 </svelte:head>
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && showAdd) showAdd = false; }} />
 
 <div class="p-8 pt-5">
 	<div class="mb-5 flex items-center justify-between">

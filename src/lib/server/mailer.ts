@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import { dbGetSettings, dbSetSetting } from './database.js';
 
 export interface SmtpConfig {
 	id: string;
@@ -13,12 +14,35 @@ export interface SmtpConfig {
 
 const smtpConfigs: Map<string, SmtpConfig> = new Map();
 
+function persistSmtp(config: SmtpConfig): void {
+	dbSetSetting(`mailer.smtp.${config.id}`, JSON.stringify(config));
+}
+
+function unpersistSmtp(id: string): void {
+	dbSetSetting(`mailer.smtp.${id}`, '');
+}
+
+export function loadPersistedSmtpConfigs(): void {
+	const all = dbGetSettings('mailer.smtp.');
+	for (const [key, value] of Object.entries(all)) {
+		if (!value) continue;
+		try {
+			const config: SmtpConfig = JSON.parse(value);
+			if (config.id) smtpConfigs.set(config.id, config);
+		} catch {}
+	}
+}
+
+try { loadPersistedSmtpConfigs(); } catch {}
+
 export function addSmtpConfig(config: SmtpConfig): void {
 	smtpConfigs.set(config.id, config);
+	persistSmtp(config);
 }
 
 export function removeSmtpConfig(id: string): void {
 	smtpConfigs.delete(id);
+	unpersistSmtp(id);
 }
 
 export function getSmtpConfig(id: string): SmtpConfig | undefined {

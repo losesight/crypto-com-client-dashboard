@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		});
 	}
 
-	const body = (await request.json()) as {
+	let body: {
 		accountId?: string;
 		from?: { name: string; email: string };
 		replyTo?: string;
@@ -26,6 +26,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		priority?: 'high' | 'normal';
 		important?: boolean;
 	};
+	try {
+		body = await request.json();
+	} catch {
+		throw error(400, 'Invalid JSON');
+	}
 
 	if (!body.accountId) throw error(400, 'accountId required');
 	const account = dbGetGmailAccountById(body.accountId);

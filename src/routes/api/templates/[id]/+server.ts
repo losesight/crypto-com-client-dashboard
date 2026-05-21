@@ -1,17 +1,8 @@
 import type { RequestHandler } from './$types';
 import { json, error } from '@sveltejs/kit';
 import { dbGetTemplateById, dbUpdateTemplate, dbDeleteTemplate, dbInsertTemplate } from '$lib/server/database.js';
+import { extractTemplateVariables } from '$lib/mailVariables.js';
 import crypto from 'node:crypto';
-
-function extractVariables(html: string): string[] {
-	const found = new Set<string>();
-	const re = /\{\{\s*([^{}]+?)\s*\}\}/g;
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(html)) !== null) {
-		found.add(`{{${m[1].trim()}}}`);
-	}
-	return [...found];
-}
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
@@ -39,7 +30,7 @@ export const PATCH: RequestHandler = async ({ params, locals, request }) => {
 	if (body.subject !== undefined) patch.subject = body.subject;
 	if (body.html !== undefined) {
 		patch.html = body.html;
-		patch.variables = extractVariables(body.html);
+		patch.variables = extractTemplateVariables(body.html);
 	}
 	if (body.shared !== undefined) patch.shared = body.shared;
 	dbUpdateTemplate(t.id, patch);

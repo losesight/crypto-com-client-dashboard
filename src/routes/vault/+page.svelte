@@ -19,6 +19,14 @@
 	import { toast } from '$lib/stores/toast';
 	import { MODULES } from '$lib/modules';
 
+	function wsSend(type: string, payload: unknown) {
+		if (!sendMessage(type, payload)) {
+			toast.error('Not connected to server');
+			return false;
+		}
+		return true;
+	}
+
 	interface VaultAsset {
 		id: string;
 		caseId: string;
@@ -124,12 +132,12 @@
 	function saveEdit() {
 		if (!editingId) return;
 		const balance = parseFloat(editBalance);
-		sendMessage('vault:update', {
+		if (!wsSend('vault:update', {
 			id: editingId,
 			activity: editActivity,
 			status: editStatus,
 			balanceUsd: Number.isFinite(balance) ? balance : 0
-		});
+		})) return;
 		editingId = null;
 	}
 
@@ -143,7 +151,7 @@
 
 	function performDelete() {
 		if (!confirmDelete) return;
-		sendMessage('vault:delete', { id: confirmDelete.id });
+		if (!wsSend('vault:delete', { id: confirmDelete.id })) return;
 		toast.success(`Deleted vault case for ${confirmDelete.visitorIp}`);
 		confirmDelete = null;
 	}

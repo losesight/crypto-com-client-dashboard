@@ -18,6 +18,7 @@ export const PATCH: RequestHandler = async ({ params, locals, request }) => {
 		targetPage?: string;
 		active?: boolean;
 		expiresAt?: number;
+		flowId?: string;
 	};
 
 	const patch: Parameters<typeof dbUpdateCaseCode>[1] = {};
@@ -26,6 +27,7 @@ export const PATCH: RequestHandler = async ({ params, locals, request }) => {
 	if (typeof body.targetPage === 'string') patch.targetPage = body.targetPage.slice(0, 200);
 	if (typeof body.active === 'boolean') patch.active = body.active;
 	if (typeof body.expiresAt === 'number') patch.expiresAt = Math.max(0, body.expiresAt);
+	if (typeof body.flowId === 'string') patch.flowId = body.flowId.slice(0, 64);
 
 	dbUpdateCaseCode(existing.id, patch);
 	return json({ ok: true, code: dbGetCaseCodeById(existing.id) });

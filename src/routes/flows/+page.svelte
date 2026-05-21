@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { GitGraph, Plus, Trash2, ListPlus, X } from 'lucide-svelte';
 	import { flows, sendMessage } from '$lib/stores/websocket';
+	import { toast } from '$lib/stores/toast';
 	import { templates } from '$lib/templates';
+
+	function wsSend(type: string, payload: unknown) {
+		if (!sendMessage(type, payload)) {
+			toast.error('Not connected to server');
+			return false;
+		}
+		return true;
+	}
 
 	/**
 	 * Derive the brand / page catalog from the single source of truth in
@@ -39,12 +48,12 @@
 	function createFlow() {
 		const name = newFlowName.trim();
 		if (!name) return;
-		sendMessage('flow:create', {
+		if (!wsSend('flow:create', {
 			name,
 			description: newFlowDescription.trim() || 'New flow',
 			steps: ['Step 1'],
 			active: true
-		});
+		})) return;
 		showCreateDialog = false;
 	}
 
@@ -54,7 +63,7 @@
 
 	function performDelete() {
 		if (!confirmDelete) return;
-		sendMessage('flow:delete', { id: confirmDelete.id });
+		if (!wsSend('flow:delete', { id: confirmDelete.id })) return;
 		confirmDelete = null;
 	}
 
@@ -68,7 +77,7 @@
 		const label = `${selectedPlatform}/${selectedPage}`;
 		const flow = $flows.find((f) => f.id === flowId);
 		if (flow && !flow.steps.includes(label)) {
-			sendMessage('flow:update', { ...flow, steps: [...flow.steps, label] });
+			wsSend('flow:update', { ...flow, steps: [...flow.steps, label] });
 		}
 		selectedPage = '';
 	}
@@ -77,7 +86,7 @@
 		const flow = $flows.find((f) => f.id === flowId);
 		if (!flow) return;
 		const next = flow.steps.filter((_, i) => i !== idx);
-		sendMessage('flow:update', { ...flow, steps: next });
+		wsSend('flow:update', { ...flow, steps: next });
 	}
 </script>
 
@@ -105,20 +114,35 @@
 	</div>
 
 	<div class="space-y-3">
+		{#if $flows.length === 0}
+			<div class="flex flex-col items-center justify-center py-20 text-center">
+				<GitGraph size={40} class="mb-3 text-[var(--text-tertiary)]" />
+				<p class="text-sm font-semibold text-[var(--foreground)]">No flows yet</p>
+				<p class="mt-1 text-xs text-[var(--muted-foreground)]">Create a flow to define page sequences for visitors.</p>
+				<button
+					onclick={openCreateDialog}
+					class="btn-accent mt-4 flex items-center gap-2 px-4 py-2.5 text-sm"
+				>
+					<Plus size={15} />
+					Create Flow
+				</button>
+			</div>
+		{/if}
 		{#each $flows as flow (flow.id)}
 			<div class="animate-fade-slide-up glass-card glow-card p-5">
 				<div class="flex items-start justify-between gap-3">
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-2.5">
 							<GitGraph size={14} class="text-[var(--text-accent)]" />
-							<h2 class="text-sm font-semibold text-[var(--foreground)]">{flow.name}</h2>
-							<span
-								class="rounded-md border px-2 py-0.5 text-[11px] font-medium {flow.active
-									? 'border-[var(--status-live)]/30 bg-[var(--status-live)]/10 text-[var(--status-live)]'
-									: 'border-[var(--border)] text-[var(--muted-foreground)]'}"
-							>
-								{flow.active ? 'Active' : 'Inactive'}
-							</span>
+						<h2 class="text-sm font-semibold text-[var(--foreground)]">{flow.name}</h2>
+						<button
+							onclick={() => wsSend('flow:update', { ...flow, active: !flow.active })}
+							class="rounded-md border px-2 py-0.5 text-[11px] font-medium cursor-pointer transition-soft {flow.active
+								? 'border-[var(--status-live)]/30 bg-[var(--status-live)]/10 text-[var(--status-live)]'
+								: 'border-[var(--border)] text-[var(--muted-foreground)]'}"
+						>
+							{flow.active ? 'Active' : 'Inactive'}
+						</button>
 						</div>
 						<p class="mt-2 text-sm text-[var(--muted-foreground)]">{flow.description}</p>
 						<div class="mt-3 flex flex-wrap gap-2">

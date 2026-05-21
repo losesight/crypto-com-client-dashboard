@@ -19,6 +19,7 @@
 		Check
 	} from 'lucide-svelte';
 	import { page } from '$app/stores';
+	import { toast } from '$lib/stores/toast';
 
 	interface Template {
 		id: string;
@@ -122,6 +123,9 @@
 			newName = '';
 			newHtml = '';
 			newShared = false;
+			toast.success('Template created');
+		} else {
+			toast.error('Failed to create template');
 		}
 	}
 
@@ -139,6 +143,9 @@
 			showImport = false;
 			importName = '';
 			importHtml = '';
+			toast.success('Template imported');
+		} else {
+			toast.error('Failed to import template');
 		}
 	}
 
@@ -171,6 +178,8 @@
 				templates = templates.map((t) => (t.id === selected!.id ? data.template : t));
 				saved = true;
 				setTimeout(() => (saved = false), 1200);
+			} else {
+				toast.error('Failed to save template');
 			}
 		} finally {
 			saving = false;
@@ -183,8 +192,9 @@
 		if (res.ok) {
 			templates = templates.filter((x) => x.id !== t.id);
 			if (selectedId === t.id) selectedId = templates[0]?.id ?? null;
+			toast.success(`Deleted template "${t.name}"`);
 		} else {
-			alert('Cannot delete (you may not own this template).');
+			toast.error('Cannot delete (you may not own this template).');
 		}
 	}
 
@@ -218,6 +228,8 @@
 <svelte:head>
 	<title>Templates · Panel</title>
 </svelte:head>
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { if (showCreate) showCreate = false; else if (showImport) showImport = false; } }} />
 
 <div class="p-8 pt-5">
 	<div class="mb-5 flex items-start justify-between gap-3">

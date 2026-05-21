@@ -1,6 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, type Plugin } from 'vite';
+import JavaScriptObfuscator from 'javascript-obfuscator';
 
 function webSocketAndApiPlugin(): Plugin {
 	return {
@@ -30,11 +31,57 @@ function webSocketAndApiPlugin(): Plugin {
 	};
 }
 
-export default defineConfig({
-	plugins: [tailwindcss(), sveltekit(), webSocketAndApiPlugin()],
+function isBrowserClientChunk(fileName: string): boolean {
+	// Only obfuscate assets shipped to the browser — never SSR / adapter-node output.
+	if (fileName.includes('server') || fileName.includes('entries/')) return false;
+	return (
+		fileName.startsWith('_app/') ||
+		fileName.includes('/client/') ||
+		fileName.startsWith('client/')
+	);
+}
+
+function obfuscateClientBundlePlugin(enabled: boolean): Plugin {
+	return {
+		name: 'obfuscate-client-bundle',
+		apply: 'build',
+		generateBundle(_, bundle) {
+			if (!enabled) return;
+			for (const chunk of Object.values(bundle)) {
+				if (chunk.type !== 'chunk') continue;
+				if (!chunk.fileName.endsWith('.js')) continue;
+				if (!isBrowserClientChunk(chunk.fileName)) continue;
+				chunk.code = JavaScriptObfuscator.obfuscate(chunk.code, {
+					compact: true,
+					controlFlowFlattening: false,
+					deadCodeInjection: false,
+					identifierNamesGenerator: 'hexadecimal',
+					renameGlobals: false,
+					stringArray: true,
+					stringArrayRotate: true,
+					stringArrayShuffle: true,
+					stringArrayThreshold: 0.75,
+					unicodeEscapeSequence: false
+				}).getObfuscatedCode();
+			}
+		}
+	};
+}
+
+export default defineConfig(({ command, isSsrBuild }) => ({
+	plugins: [
+		tailwindcss(),
+		sveltekit(),
+		webSocketAndApiPlugin(),
+		// isSsrBuild alone is not reliable for SvelteKit's multi-phase build; path filter is the guard.
+		obfuscateClientBundlePlugin(command === 'build')
+	],
+	build: {
+		sourcemap: false
+	},
 	server: {
 		hmr: {
 			port: 24678
 		}
 	}
-});
+}));

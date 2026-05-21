@@ -19,6 +19,7 @@
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/nodemailer": "^8.0.0",
 		"@types/ws": "^8.18.1",
+		"javascript-obfuscator": "^5.4.2",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
 		"tailwindcss": "^4.2.2",

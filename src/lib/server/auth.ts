@@ -1,10 +1,12 @@
 import crypto from 'node:crypto';
 import {
 	dbGetUserByUsername,
+	dbGetUserById,
 	verifyPassword,
 	dbCreateSession,
 	dbGetSession,
 	dbDeleteSession,
+	dbDeleteSessionsByUser,
 	dbUpdateLastLogin,
 	dbCleanExpiredSessions
 } from './database.js';
@@ -43,10 +45,16 @@ export function getSessionUser(token: string | undefined): SessionUser | null {
 		return null;
 	}
 
+	const user = dbGetUserById(session.user_id);
+	if (!user || !user.active) {
+		dbDeleteSession(token);
+		return null;
+	}
+
 	return {
-		id: session.user_id,
-		username: session.username,
-		role: session.role
+		id: user.id,
+		username: user.username,
+		role: user.role
 	};
 }
 

