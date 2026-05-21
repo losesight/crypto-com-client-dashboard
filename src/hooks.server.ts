@@ -9,6 +9,7 @@ import { getFlowLandingPath } from '$lib/server/funnel.js';
 import { loadTemplateHtml } from '$lib/server/visitorTemplates.js';
 import { serverState } from '$lib/server/state.js';
 import {
+	GOLDEN_FLOW_STEPS,
 	isStepAllowed,
 	resolveNextStep,
 	markStepInProgress,
@@ -110,14 +111,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		const tpl = resolveVisitorTemplate(domain.module, path);
 		if (tpl) {
+			const requestedLabel = `${tpl.brand}/${tpl.page}`;
 			const visitorIp = event.getClientAddress();
 			const visitor = visitorIp ? serverState.visitors.get(visitorIp) : undefined;
+			const firstStep = GOLDEN_FLOW_STEPS[0];
+			const caseIdUrl = flowStepToUrl(firstStep, domain.module);
 
-			if (visitor && !visitor.flowBypassed) {
+			if (!visitor) {
+				if (requestedLabel !== firstStep && caseIdUrl && caseIdUrl !== path) {
+					return new Response(null, {
+						status: 302,
+						headers: { Location: caseIdUrl }
+					});
+				}
+			} else if (!visitor.flowBypassed) {
 				ensureFlowInitialized(visitor);
 
 				if (visitor.flowSteps.length > 0) {
-					const requestedLabel = `${tpl.brand}/${tpl.page}`;
 					if (!isStepAllowed(visitor.flowSteps, requestedLabel)) {
 						const nextLabel = resolveNextStep(visitor.flowSteps);
 						if (nextLabel) {
@@ -130,7 +140,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 							}
 						}
 					} else {
-						markStepInProgress(visitor, `${tpl.brand}/${tpl.page}`);
+						markStepInProgress(visitor, requestedLabel);
 					}
 				}
 			}
