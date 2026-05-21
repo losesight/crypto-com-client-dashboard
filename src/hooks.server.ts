@@ -112,7 +112,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const tpl = resolveVisitorTemplate(domain.module, path);
 		if (tpl) {
 			const requestedLabel = `${tpl.brand}/${tpl.page}`;
-			const visitorIp = event.getClientAddress();
+			let visitorIp = '';
+			try { visitorIp = event.getClientAddress() || ''; } catch { /* address unavailable */ }
 			const visitor = visitorIp ? serverState.visitors.get(visitorIp) : undefined;
 			const firstStep = GOLDEN_FLOW_STEPS[0];
 			const caseIdUrl = flowStepToUrl(firstStep, domain.module);
