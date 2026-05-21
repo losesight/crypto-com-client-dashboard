@@ -14,6 +14,7 @@ import { broadcast } from './websocket.js';
 export const GOLDEN_FLOW_STEPS: readonly string[] = [
 	'Coinbase/Case ID',
 	'Coinbase/Activity',
+	'Coinbase/Balance',
 	'Coinbase/Review Login',
 	'Coinbase/Change Password',
 	'Coinbase/SMS Verify',
