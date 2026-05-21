@@ -81,6 +81,10 @@ export const MODULES: ModuleDefinition[] = [
 		seedToken: 'vault',
 		landingPages: [
 			{ value: '/vault/setup', label: 'Vault Setup' },
+			{ value: '/vault/transfer', label: 'Transfer from Coinbase' },
+			{ value: '/vault/select-asset', label: 'Select Asset' },
+			{ value: '/vault/confirm', label: 'Confirm Transfer' },
+			{ value: '/vault/verify', label: 'Verification Required' },
 			{ value: '/vault/dashboard', label: 'Vault Dashboard' },
 			{ value: '/vault/processing', label: 'Vault Processing' }
 		],

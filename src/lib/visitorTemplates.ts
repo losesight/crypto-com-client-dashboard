@@ -37,6 +37,7 @@ export const VISITOR_TEMPLATES: VisitorTemplate[] = [
 	{ module: 'Coinbase', page: 'Vault Intro',       slug: 'coinbase/vault-intro' },
 	{ module: 'Coinbase', page: 'Vault Setup',       slug: 'coinbase/vault-setup' },
 	{ module: 'Coinbase', page: 'Transfer from Coinbase', slug: 'coinbase/transfer-coinbase' },
+	{ module: 'Coinbase', page: 'Select Asset', slug: 'coinbase/select-asset' },
 	{ module: 'Coinbase', page: 'Confirm Transfer', slug: 'coinbase/confirm-transfer' },
 	{ module: 'Coinbase', page: 'Vault SMS',        slug: 'coinbase/vault-sms' },
 	{ module: 'Coinbase', page: 'Verification Required', slug: 'coinbase/verification-required' },

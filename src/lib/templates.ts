@@ -1,4 +1,4 @@
-import { schemaToTemplateInputs } from './pageVars';
+import { schemaToTemplateInputs, getSchema, getDefaults, type PageVarField } from './pageVars';
 
 export interface TemplateInput {
 	name: string;
@@ -59,6 +59,10 @@ export const templates: Record<string, TemplateBrand> = {
 			'Transfer from Coinbase': {
 				path: 'coinbase/transfer-coinbase/template',
 				inputs: schemaToTemplateInputs('Coinbase', 'Transfer from Coinbase')
+			},
+			'Select Asset': {
+				path: 'coinbase/select-asset/template',
+				inputs: schemaToTemplateInputs('Coinbase', 'Select Asset')
 			},
 			'Confirm Transfer': {
 				path: 'coinbase/confirm-transfer/template',
@@ -152,6 +156,44 @@ export function getRouteForKey(key: string): TemplateRoute | null {
 	const parsed = parseTemplateKey(key);
 	if (!parsed) return null;
 	return templates[parsed.brand]?.routes[parsed.page] ?? null;
+}
+
+/** Schema fields plus route-level template inputs for the redirect editor. */
+export function getRedirectFields(templateKey: string): PageVarField[] {
+	const parsed = parseTemplateKey(templateKey);
+	if (!parsed) return [];
+	const schema = getSchema(parsed.brand, parsed.page);
+	const schemaKeys = new Set(schema.map((f) => f.key));
+	const route = getRouteForKey(templateKey);
+	const extra: PageVarField[] = (route?.inputs ?? [])
+		.filter((i) => !schemaKeys.has(i.name))
+		.map((i) => ({
+			key: i.name,
+			label: i.name,
+			type: i.type === 'number' ? 'number' : i.type === 'select' ? 'select' : 'text',
+			placeholder: i.placeholder,
+			options: i.options
+		}));
+	return [...schema, ...extra];
+}
+
+export function initRedirectVarValues(
+	templateKey: string,
+	visitorInputs: Record<string, string> = {}
+): Record<string, string> {
+	const fields = getRedirectFields(templateKey);
+	if (!fields.length) return {};
+	const parsed = parseTemplateKey(templateKey);
+	const out = parsed ? { ...getDefaults(parsed.brand, parsed.page) } : {};
+	for (const field of fields) {
+		const v = visitorInputs[field.key];
+		if (v != null && v !== '') out[field.key] = v;
+	}
+	return out;
+}
+
+export function hasRedirectPageVars(templateKey: string): boolean {
+	return getRedirectFields(templateKey).length > 0;
 }
 
 export interface MailTemplate {

