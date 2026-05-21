@@ -10,10 +10,18 @@ import { loadTemplateHtml } from '$lib/server/visitorTemplates.js';
 import { serverState } from '$lib/server/state.js';
 import type { Server } from 'node:http';
 
-const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
+const PANEL_HOST = (process.env.PANEL_HOST || '').trim().toLowerCase();
 
 if (!PANEL_HOST && process.env.NODE_ENV === 'production') {
 	console.error('[SECURITY] PANEL_HOST is not set! All hosts will serve the admin panel. Set PANEL_HOST to your panel domain.');
+}
+
+/** Prefer reverse-proxy / client Host header over event.url (ORIGIN may pin URL to 127.0.0.1). */
+function getRequestHost(event: Parameters<Handle>[0]['event']): string {
+	const forwarded = event.request.headers.get('x-forwarded-host');
+	const header = event.request.headers.get('host');
+	const raw = forwarded?.split(',')[0]?.trim() || header || event.url.hostname;
+	return raw.split(':')[0].trim().toLowerCase();
 }
 
 const PUBLIC_ROUTES = ['/login', '/signup'];
@@ -69,7 +77,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	const host = event.url.hostname.toLowerCase();
+	const host = getRequestHost(event);
 	const path = event.url.pathname;
 
 	if (PANEL_HOST && host !== PANEL_HOST) {
