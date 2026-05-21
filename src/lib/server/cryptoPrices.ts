@@ -1,4 +1,4 @@
-import { VISITOR_COIN_CATALOG, formatChangePct, formatUsdPrice, type CoinCatalogEntry } from '$lib/coinCatalog.js';
+import { VISITOR_COIN_CATALOG, formatChangePct, formatUsdPrice, type CoinCatalogEntry } from '../coinCatalog.js';
 
 export interface LiveCoinQuote {
 	symbol: string;

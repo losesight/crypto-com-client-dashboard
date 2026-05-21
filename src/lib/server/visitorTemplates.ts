@@ -12,14 +12,14 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { findTemplate, VISITOR_TEMPLATES } from '$lib/visitorTemplates';
+import { findTemplate, VISITOR_TEMPLATES } from '../visitorTemplates.js';
 import { SKIP_GENERIC_WIRING } from './funnel';
 import { dbGetSetting } from './database.js';
-import { getSchema } from '$lib/pageVars';
-import { applyLiveDatesToHtml } from '$lib/dateVars.js';
+import { getSchema } from '../pageVars.js';
+import { applyLiveDatesToHtml } from '../dateVars.js';
 
 export { findTemplate, VISITOR_TEMPLATES };
-export type { VisitorTemplate } from '$lib/visitorTemplates';
+export type { VisitorTemplate } from '../visitorTemplates.js';
 
 const TEMPLATE_ROOT = resolve(process.cwd(), 'data', 'visitor-templates');
 

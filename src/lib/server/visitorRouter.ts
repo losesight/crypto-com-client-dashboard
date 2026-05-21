@@ -2,7 +2,7 @@
  * Maps domain module + URL path to visitor template brand/page labels.
  * Paths mirror src/lib/modules.ts landingPages and signinPages values.
  */
-import { findTemplate, VISITOR_TEMPLATES } from '$lib/visitorTemplates';
+import { findTemplate, VISITOR_TEMPLATES } from '../visitorTemplates.js';
 
 export interface VisitorTemplateRef {
 	brand: string;

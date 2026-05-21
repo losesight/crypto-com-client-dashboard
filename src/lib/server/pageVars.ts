@@ -6,8 +6,8 @@ import {
 	getSchema,
 	VAULT_TRANSFER_PAGES,
 	type PageVarField
-} from '$lib/pageVars.js';
-import { buildLiveDateVars } from '$lib/dateVars.js';
+} from '../pageVars.js';
+import { buildLiveDateVars } from '../dateVars.js';
 import { serverState } from './state.js';
 
 export function getStoredPageVars(brand: string, page: string): Record<string, string> {
