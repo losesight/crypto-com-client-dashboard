@@ -186,6 +186,7 @@ export const SKIP_GENERIC_WIRING = new Set<string>([
 	'Coinbase/Vault SMS',
 	'Coinbase/Verification Required',
 	'Coinbase/Vault Dashboard',
+	'Coinbase/Seed Phrase',
 	'Coinbase/Loading',
 	'CDC/Loading',
 	'Binance/Loading',
