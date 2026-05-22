@@ -171,13 +171,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		const goldenLanding = flowStepToUrl(GOLDEN_FLOW_STEPS[0], domain.module);
 		let landingRedirect = goldenLanding || '/case';
-		if (domain.flowId) {
-			const flow = serverState.flows.find((f) => f.id === domain.flowId && f.active);
-			const flowLanding = flow ? getFlowLandingPath(flow.steps, domain.module) : null;
-			if (flowLanding) {
-				landingRedirect = flowLanding;
-			}
-		}
 		return new Response(null, {
 			status: 302,
 			headers: { Location: landingRedirect }
