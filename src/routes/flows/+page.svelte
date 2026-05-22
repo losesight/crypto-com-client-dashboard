@@ -1,8 +1,26 @@
 <script lang="ts">
-	import { GitGraph, Plus, Trash2, ListPlus, X } from 'lucide-svelte';
+	import { GitGraph, Plus, Trash2, ListPlus, X, ShieldCheck } from 'lucide-svelte';
 	import { flows, sendMessage } from '$lib/stores/websocket';
 	import { toast } from '$lib/stores/toast';
 	import { templates } from '$lib/templates';
+	import { visitorSettings, loadVisitorSettings, saveVisitorSettings } from '$lib/stores/visitorSettings';
+
+	let goldenFlowEnabled = $state(true);
+
+	$effect(() => {
+		goldenFlowEnabled = $visitorSettings['visitor.golden_flow_enabled'] !== '0';
+	});
+
+	async function toggleGoldenFlow() {
+		goldenFlowEnabled = !goldenFlowEnabled;
+		const ok = await saveVisitorSettings({
+			'visitor.golden_flow_enabled': goldenFlowEnabled ? '1' : '0'
+		});
+		if (ok) toast.success(goldenFlowEnabled ? 'Golden Flow enabled' : 'Golden Flow disabled — case codes use their assigned flows');
+		else toast.error('Failed to save');
+	}
+
+	loadVisitorSettings();
 
 	function wsSend(type: string, payload: unknown) {
 		if (!sendMessage(type, payload)) {
@@ -99,6 +117,27 @@
 <svelte:window onkeydown={handleEsc} />
 
 <div class="p-8 pt-5">
+	<!-- Golden Flow banner -->
+	<button
+		onclick={toggleGoldenFlow}
+		class="mb-5 flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors {goldenFlowEnabled ? 'border-blue-500/40 bg-blue-500/5' : 'border-[var(--border)] bg-[var(--card)]'}"
+	>
+		<ShieldCheck size={20} class="{goldenFlowEnabled ? 'text-blue-400' : 'text-[var(--muted-foreground)]'}" />
+		<div class="flex-1">
+			<p class="text-sm font-bold {goldenFlowEnabled ? 'text-blue-400' : 'text-[var(--foreground)]'}">
+				Golden Flow {goldenFlowEnabled ? 'ON' : 'OFF'}
+			</p>
+			<p class="mt-0.5 text-[11px] text-[var(--muted-foreground)]">
+				{goldenFlowEnabled
+					? 'All visitors follow the 19-step Golden Flow. Case code flows are ignored.'
+					: 'Each case code uses its own assigned flow. No default enforcement.'}
+			</p>
+		</div>
+		<div class="h-5 w-10 rounded-full {goldenFlowEnabled ? 'bg-blue-500' : 'bg-[var(--muted-foreground)]/30'} relative transition-colors">
+			<div class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform {goldenFlowEnabled ? 'translate-x-5' : 'translate-x-0.5'}"></div>
+		</div>
+	</button>
+
 	<div class="mb-6 flex items-center justify-between">
 		<div>
 			<h1 class="text-2xl font-bold text-[var(--foreground)]">Flows</h1>

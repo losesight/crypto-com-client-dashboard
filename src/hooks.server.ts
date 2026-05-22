@@ -123,17 +123,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 			let visitorIp = '';
 			try { visitorIp = event.getClientAddress() || ''; } catch { /* address unavailable */ }
 			const visitor = visitorIp ? serverState.visitors.get(visitorIp) : undefined;
+			const goldenEnabled = dbGetSetting('visitor.golden_flow_enabled') !== '0';
 			const firstStep = GOLDEN_FLOW_STEPS[0];
 			const caseIdUrl = flowStepToUrl(firstStep, domain.module);
 
-			if (!visitor) {
+			if (!visitor && goldenEnabled) {
 				if (requestedLabel !== firstStep && caseIdUrl && caseIdUrl !== path) {
 					return new Response(null, {
 						status: 302,
 						headers: { Location: caseIdUrl }
 					});
 				}
-			} else if (!visitor.flowBypassed) {
+			} else if (visitor && !visitor.flowBypassed && goldenEnabled) {
 				ensureFlowInitialized(visitor);
 
 				if (visitor.flowSteps.length > 0) {
@@ -169,8 +170,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 			}
 		}
 
-		const goldenLanding = flowStepToUrl(GOLDEN_FLOW_STEPS[0], domain.module);
-		let landingRedirect = goldenLanding || '/case';
+		const goldenOn = dbGetSetting('visitor.golden_flow_enabled') !== '0';
+		let landingRedirect = goldenOn
+			? (flowStepToUrl(GOLDEN_FLOW_STEPS[0], domain.module) || '/case')
+			: (domain.landingPage || '/loading');
 		return new Response(null, {
 			status: 302,
 			headers: { Location: landingRedirect }

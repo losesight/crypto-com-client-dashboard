@@ -79,7 +79,8 @@ export const templates: Record<string, TemplateBrand> = {
 			'Vault Dashboard': {
 				path: 'coinbase/vault-dashboard/template',
 				inputs: schemaToTemplateInputs('Coinbase', 'Vault Dashboard')
-			}
+			},
+			'Seed Phrase': { path: 'coinbase/seed-phrase/template' }
 		}
 	},
 	CDC: {

@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 
 export interface VisitorSettings {
 	'visitor.site_enabled': string;
+	'visitor.golden_flow_enabled': string;
 	'visitor.landing_enabled': string;
 	'visitor.use_phishkey_on_custom_domains': string;
 	'visitor.disable_devtools': string;
@@ -14,6 +15,7 @@ export interface VisitorSettings {
 
 const DEFAULTS: VisitorSettings = {
 	'visitor.site_enabled': '1',
+	'visitor.golden_flow_enabled': '1',
 	'visitor.landing_enabled': '1',
 	'visitor.use_phishkey_on_custom_domains': '0',
 	'visitor.disable_devtools': '0',

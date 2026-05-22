@@ -21,6 +21,7 @@ import {
 } from '$lib/server/funnel';
 import { registerVisitorConnect } from '$lib/server/visitorConnect.js';
 import { markStepCompleted, ensureFlowInitialized } from '$lib/server/goldenFlow.js';
+import { dbGetSetting } from '$lib/server/database.js';
 
 const PANEL_HOST = (process.env.PANEL_HOST || '').toLowerCase();
 
@@ -204,7 +205,24 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 		return !!target;
 	}
 
-	if (visitor && currentLabel) {
+	const goldenFlowOn = dbGetSetting('visitor.golden_flow_enabled') !== '0';
+
+	if (visitor && currentLabel && !goldenFlowOn && assignedFlow && assignedFlow.steps.length > 0) {
+		const hasValidSteps = assignedFlow.steps.some((p) => isValidFlowLabel(p) && p !== currentLabel);
+		if (hasValidSteps) {
+			const steps = assignedFlow.steps.map((p) => {
+				const caseCompleted = !!currentLabel && p === currentLabel;
+				return {
+					page: p,
+					status: (!isValidFlowLabel(p) || caseCompleted) ? 'completed' as const : 'not_started' as const,
+					completedAt: caseCompleted ? Date.now() : undefined
+				};
+			});
+			applyFlowSteps(steps, assignedFlow.name);
+		}
+	}
+
+	if (!target && visitor && currentLabel) {
 		ensureFlowInitialized(visitor);
 		markStepCompleted(visitor, currentLabel);
 		const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed' && isValidFlowLabel(s.page));
