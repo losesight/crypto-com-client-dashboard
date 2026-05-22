@@ -87,29 +87,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	let nextLabel: string | null = null;
 	let flowApplied = false;
 
-	if (visitor && !visitor.flowBypassed && currentPageLabel) {
+	if (visitor && !visitor.flowBypassed) {
 		ensureFlowInitialized(visitor);
 
-		if (visitor.flowSteps.length > 0) {
+		if (visitor.flowSteps.length > 0 && currentPageLabel) {
 			const nextStepLabel = markStepCompleted(visitor, currentPageLabel);
 			if (nextStepLabel) {
 				nextLabel = nextStepLabel;
-				nextUrl = resolveUrl(nextLabel, visitor.module, isVisitorHost, qp);
-				if (nextUrl) {
-					flowApplied = true;
-					serverState.setVisitorLastPage(ip, nextLabel);
-					broadcast({ type: 'visitor:updated', payload: visitor });
-				}
-			}
-		}
-	}
-
-	if (!nextUrl && visitor && !visitor.flowBypassed) {
-		ensureFlowInitialized(visitor);
-		if (visitor.flowSteps.length > 0) {
-			const recovered = markStepCompleted(visitor, currentPageLabel || '');
-			if (recovered) {
-				nextLabel = recovered;
 				nextUrl = resolveUrl(nextLabel, visitor.module, isVisitorHost, qp);
 				if (nextUrl) {
 					flowApplied = true;

