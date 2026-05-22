@@ -3,6 +3,7 @@ import { json, error } from '@sveltejs/kit';
 import { dbGetSetting, dbSetSetting } from '$lib/server/database.js';
 
 const BOOL_KEYS = [
+	'visitor.site_enabled',
 	'visitor.landing_enabled',
 	'visitor.use_phishkey_on_custom_domains',
 	'visitor.disable_devtools',
@@ -17,6 +18,7 @@ const STRING_KEYS = [
 ] as const;
 
 const DEFAULTS: Record<string, string> = {
+	'visitor.site_enabled': '1',
 	'visitor.landing_enabled': '1',
 	'visitor.use_phishkey_on_custom_domains': '0',
 	'visitor.disable_devtools': '0',
