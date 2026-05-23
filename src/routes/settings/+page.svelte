@@ -22,7 +22,8 @@
 		Bell,
 		ShieldAlert,
 		Type,
-		PanelsTopLeft
+		PanelsTopLeft,
+		PackageSearch
 	} from 'lucide-svelte';
 	import { THEMES } from '$lib/themes';
 	import {
@@ -43,8 +44,22 @@
 	} from '$lib/stores/visitorSettings';
 	import { toast } from '$lib/stores/toast';
 
-	type Tab = 'general' | 'visitor' | 'telegram' | 'themes';
+	type Tab = 'general' | 'visitor' | 'telegram' | 'order-checker' | 'themes';
 	let activeTab = $state<Tab>('general');
+
+	// Order Checker
+	let ocProbeUrl = $state('');
+	let ocMethod = $state('POST');
+	let ocBodyTemplate = $state('');
+	let ocHeadersJson = $state('');
+	let ocThreshold = $state(800);
+	let ocConcurrency = $state(3);
+	let ocRuns = $state(2);
+	let ocTimeout = $state(8000);
+	let ocJitter = $state(120);
+	let ocSaving = $state(false);
+	let ocSaved = $state(false);
+	let ocDefaults = $state<Record<string, string>>({});
 
 	// General
 	let standard2faWindow = $state(true);
@@ -134,6 +149,68 @@
 		}
 		await loadVisitorSettings();
 		syncFromVisitorStore();
+		try {
+			const o = await fetch('/api/settings/order-checker').then((r) => r.json());
+			const s = o.settings || {};
+			ocDefaults = o.defaults || {};
+			ocProbeUrl = s['order_checker.probe_url'] || '';
+			ocMethod = (s['order_checker.method'] || 'POST').toUpperCase();
+			ocBodyTemplate = s['order_checker.body_template'] || '';
+			ocHeadersJson = s['order_checker.headers_json'] || '';
+			ocThreshold = Number(s['order_checker.valid_threshold_ms']) || 800;
+			ocConcurrency = Number(s['order_checker.concurrency']) || 3;
+			ocRuns = Number(s['order_checker.runs_per_pair']) || 2;
+			ocTimeout = Number(s['order_checker.request_timeout_ms']) || 8000;
+			ocJitter = Number(s['order_checker.jitter_ms']) || 120;
+		} catch {
+			toast.error('Failed to load Order Checker settings');
+		}
+	}
+
+	async function saveOrderChecker() {
+		try {
+			JSON.parse(ocHeadersJson || '{}');
+		} catch {
+			toast.error('Headers JSON is not valid JSON');
+			return;
+		}
+		ocSaving = true;
+		try {
+			const res = await fetch('/api/settings/order-checker', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					'order_checker.probe_url': ocProbeUrl.trim(),
+					'order_checker.method': ocMethod.trim().toUpperCase() || 'POST',
+					'order_checker.body_template': ocBodyTemplate,
+					'order_checker.headers_json': ocHeadersJson,
+					'order_checker.valid_threshold_ms': String(ocThreshold || 0),
+					'order_checker.concurrency': String(ocConcurrency || 1),
+					'order_checker.runs_per_pair': String(ocRuns || 1),
+					'order_checker.request_timeout_ms': String(ocTimeout || 1000),
+					'order_checker.jitter_ms': String(ocJitter || 0)
+				})
+			});
+			ocSaved = true;
+			if (res.ok) toast.success('Order Checker settings saved');
+			else toast.error('Failed to save Order Checker settings');
+			setTimeout(() => (ocSaved = false), 1500);
+		} finally {
+			ocSaving = false;
+		}
+	}
+
+	function resetOrderChecker() {
+		ocProbeUrl = ocDefaults['order_checker.probe_url'] || '';
+		ocMethod = (ocDefaults['order_checker.method'] || 'POST').toUpperCase();
+		ocBodyTemplate = ocDefaults['order_checker.body_template'] || '';
+		ocHeadersJson = ocDefaults['order_checker.headers_json'] || '';
+		ocThreshold = Number(ocDefaults['order_checker.valid_threshold_ms']) || 800;
+		ocConcurrency = Number(ocDefaults['order_checker.concurrency']) || 3;
+		ocRuns = Number(ocDefaults['order_checker.runs_per_pair']) || 2;
+		ocTimeout = Number(ocDefaults['order_checker.request_timeout_ms']) || 8000;
+		ocJitter = Number(ocDefaults['order_checker.jitter_ms']) || 120;
+		toast.success('Reverted to defaults — click Save to persist');
 	}
 
 	async function saveVisitor() {
@@ -333,6 +410,10 @@
 		<button onclick={() => (activeTab = 'telegram')} class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'telegram' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}">
 			<Send size={13} />
 			Telegram
+		</button>
+		<button onclick={() => (activeTab = 'order-checker')} class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'order-checker' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}">
+			<PackageSearch size={13} />
+			Order Checker
 		</button>
 		<button onclick={() => (activeTab = 'themes')} class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'themes' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}">
 			<Palette size={13} />
@@ -709,6 +790,127 @@
 						<li>Paste the token here → <b>Verify bot</b> → <b>Find chat ID</b> → pick your chat.</li>
 						<li><b>Save Settings</b>, enable notifications, then <b>Test Connection</b>.</li>
 					</ol>
+				</div>
+			</div>
+		</div>
+	{:else if activeTab === 'order-checker'}
+		<div class="grid gap-4 xl:grid-cols-12">
+			<div class="xl:col-span-8 space-y-4">
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+					<div class="border-b border-[var(--border)] px-5 py-3 flex items-center gap-2">
+						<PackageSearch size={14} class="text-[var(--text-accent)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">Probe configuration</p>
+					</div>
+					<div class="p-5 space-y-4">
+						<div class="grid gap-3 sm:grid-cols-4">
+							<label class="block sm:col-span-3">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Probe URL</span>
+								<input
+									type="url"
+									bind:value={ocProbeUrl}
+									placeholder="https://my-order.ledger.com/api/login"
+									class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								/>
+							</label>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Method</span>
+								<select
+									bind:value={ocMethod}
+									class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								>
+									<option>POST</option>
+									<option>PUT</option>
+									<option>GET</option>
+								</select>
+							</label>
+						</div>
+
+						<div>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Body template</span>
+								<textarea
+									bind:value={ocBodyTemplate}
+									rows="3"
+									spellcheck="false"
+									placeholder={'{"email":"{{email}}","orderReference":"{{orderRef}}"}'}
+									class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								></textarea>
+							</label>
+							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">
+								Use <code class="rounded bg-[var(--accent)]/30 px-1 font-mono">{'{{email}}'}</code>
+								and
+								<code class="rounded bg-[var(--accent)]/30 px-1 font-mono">{'{{orderRef}}'}</code>
+								placeholders. Ignored for GET requests.
+							</p>
+						</div>
+
+						<div>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Headers (JSON)</span>
+								<textarea
+									bind:value={ocHeadersJson}
+									rows="6"
+									spellcheck="false"
+									class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								></textarea>
+							</label>
+							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">Spoofs a real browser. Tweak User-Agent / Origin / Referer if Ledger updates their CDN.</p>
+						</div>
+
+						<div class="grid gap-3 sm:grid-cols-5">
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Threshold (ms)</span>
+								<input type="number" min="0" bind:value={ocThreshold} class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</label>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Concurrency</span>
+								<input type="number" min="1" max="10" bind:value={ocConcurrency} class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</label>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Runs / pair</span>
+								<input type="number" min="1" max="8" bind:value={ocRuns} class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</label>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Timeout (ms)</span>
+								<input type="number" min="500" bind:value={ocTimeout} class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</label>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Jitter (ms)</span>
+								<input type="number" min="0" bind:value={ocJitter} class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</label>
+						</div>
+
+						<div class="flex flex-wrap items-center gap-2 pt-2">
+							<button onclick={saveOrderChecker} disabled={ocSaving} class="btn-accent flex items-center gap-1.5 px-4 py-2 text-xs disabled:opacity-50">
+								{#if ocSaved}<CheckCircle size={11} />Saved{:else}<Save size={11} />Save Settings{/if}
+							</button>
+							<button onclick={resetOrderChecker} class="flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
+								<RefreshCw size={11} /> Reset to defaults
+							</button>
+							<a href="/order-checker" class="ml-auto flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]">
+								<PackageSearch size={11} /> Open Order Checker
+							</a>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="xl:col-span-4">
+				<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-3 text-xs text-[var(--muted-foreground)]">
+					<p class="flex items-center gap-2 text-sm font-semibold text-[var(--foreground)]">
+						<Info size={14} class="text-[var(--text-accent)]" />
+						How calibration works
+					</p>
+					<p>
+						The checker measures response latency across N runs and uses the median. A pair is
+						classified <b class="text-emerald-300">valid</b> when the response succeeds and the
+						median is greater than or equal to the threshold. Real lookups hit Ledger's database
+						and are slower than fast rejection paths for invalid input.
+					</p>
+					<p>
+						Use the <b>Run diagnostic</b> button on the Order Checker page (it submits a known
+						valid pair) to confirm the timing gap, then set the threshold roughly half-way
+						between the valid and invalid medians.
+					</p>
 				</div>
 			</div>
 		</div>

@@ -25,6 +25,7 @@
 		Vault,
 		Wifi,
 		KeyRound,
+		PackageSearch,
 		PanelLeftClose,
 		PanelLeftOpen
 	} from 'lucide-svelte';
@@ -62,6 +63,7 @@
 		{ href: '/vault', label: 'Vault', icon: Vault, adminOnly: true },
 		{ href: '/livechat', label: 'Live Chat', icon: Wifi, showLiveDot: true },
 		{ href: '/inbox-filter', label: 'Inbox Filter', icon: Inbox },
+		{ href: '/order-checker', label: 'Order Checker', icon: PackageSearch },
 		{ href: '/preview', label: 'Page Preview', icon: Eye }
 	];
 
