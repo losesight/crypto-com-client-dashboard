@@ -50,6 +50,8 @@
 		summary: BatchSummary;
 	}
 
+	type Mode = 'pair' | 'email' | 'orderRef';
+	let mode = $state<Mode>('pair');
 	let pairsText = $state(
 		'# Paste email,orderRef per line (comma, space, or tab separated)\n# ooyeleye0@gmail.com, LDG3530088\n'
 	);
@@ -57,6 +59,17 @@
 	let concurrency = $state(3);
 	let runs = $state(2);
 	let saveBatch = $state(true);
+
+	// Per-batch probe overrides (left blank = use Settings)
+	let curlInput = $state('');
+	let overrideProbeUrl = $state('');
+	let overrideMethod = $state('');
+	let overrideBody = $state('');
+	let overrideHeadersJson = $state('');
+	let showAdvanced = $state(false);
+	let importingCurl = $state(false);
+
+	const DIAGNOSTIC = { email: 'ooyeleye0@gmail.com', orderRef: 'LDG3530088' };
 
 	let results: ProbeResult[] = $state([]);
 	let summary: BatchSummary | null = $state(null);
@@ -77,7 +90,6 @@
 	let loadingHistory = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
 
-	const DIAGNOSTIC_PAIR = 'ooyeleye0@gmail.com, LDG3530088';
 
 	let visibleResults = $derived(
 		validOnly ? results.filter((r) => r.inferredValid) : results
@@ -120,26 +132,106 @@
 	let hasOverriddenConcurrency = $state(false);
 	let hasOverriddenRuns = $state(false);
 
-	function parsePairs(raw: string): { email: string; orderRef: string }[] {
+	function parsePairs(raw: string, m: Mode): { email: string; orderRef: string }[] {
 		const out: { email: string; orderRef: string }[] = [];
 		for (const line of raw.split(/\r?\n/)) {
 			const trimmed = line.trim();
 			if (!trimmed || trimmed.startsWith('#')) continue;
-			const match = /^([^\s,;\t]+)[\s,;\t]+(\S+)$/.exec(trimmed);
-			if (!match) continue;
-			out.push({
-				email: match[1].replace(/^"|"$/g, ''),
-				orderRef: match[2].replace(/^"|"$/g, '')
-			});
+			if (m === 'pair') {
+				const match = /^([^\s,;\t]+)[\s,;\t]+(\S+)$/.exec(trimmed);
+				if (!match) continue;
+				out.push({
+					email: match[1].replace(/^"|"$/g, ''),
+					orderRef: match[2].replace(/^"|"$/g, '')
+				});
+			} else {
+				const token = trimmed.replace(/^"|"$/g, '');
+				if (!token) continue;
+				if (m === 'email') out.push({ email: token, orderRef: 'PROBE00000' });
+				else out.push({ email: 'probe-placeholder@example.com', orderRef: token });
+			}
 		}
 		return out;
 	}
 
-	async function runCheck(pairsArg?: { email: string; orderRef: string }[]) {
+	function parseHeadersOverride(): unknown {
+		const raw = overrideHeadersJson.trim();
+		if (!raw) return undefined;
+		try {
+			return JSON.parse(raw);
+		} catch {
+			toast.error('Headers JSON is not valid');
+			throw new Error('bad headers json');
+		}
+	}
+
+	async function importCurl() {
+		const text = curlInput.trim();
+		if (!text) {
+			toast.error('Paste a cURL command first');
+			return;
+		}
+		importingCurl = true;
+		try {
+			const res = await fetch('/api/order-checker/import-curl', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					curl: text,
+					sampleEmail: DIAGNOSTIC.email,
+					sampleOrderRef: DIAGNOSTIC.orderRef
+				})
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = (await res.json()) as {
+				ok: boolean;
+				probeUrl: string;
+				method: string;
+				headers: Record<string, string>;
+				bodyTemplate: string;
+			};
+			if (!data.ok && !data.probeUrl) {
+				toast.error('Could not parse URL from cURL command');
+				return;
+			}
+			overrideProbeUrl = data.probeUrl || '';
+			overrideMethod = data.method || 'POST';
+			overrideBody = data.bodyTemplate || '';
+			overrideHeadersJson = JSON.stringify(data.headers || {}, null, 2);
+			showAdvanced = true;
+			toast.success('Imported cURL — override fields populated');
+		} catch (err: any) {
+			toast.error(err?.message || 'Import failed');
+		} finally {
+			importingCurl = false;
+		}
+	}
+
+	function clearOverrides() {
+		overrideProbeUrl = '';
+		overrideMethod = '';
+		overrideBody = '';
+		overrideHeadersJson = '';
+	}
+
+	async function runCheck(pairsArg?: { email: string; orderRef: string }[], modeArg?: Mode) {
 		if (running) return;
-		const pairs = pairsArg ?? parsePairs(pairsText);
+		const activeMode: Mode = modeArg ?? mode;
+		const pairs = pairsArg ?? parsePairs(pairsText, activeMode);
 		if (pairs.length === 0) {
-			toast.error('Add at least one email,orderRef pair');
+			toast.error(
+				activeMode === 'pair'
+					? 'Add at least one email,orderRef pair'
+					: activeMode === 'email'
+						? 'Add at least one email'
+						: 'Add at least one order ref'
+			);
+			return;
+		}
+		let headersOverride: unknown;
+		try {
+			headersOverride = parseHeadersOverride();
+		} catch {
 			return;
 		}
 		results = [];
@@ -157,6 +249,11 @@
 					threshold,
 					concurrency,
 					runs,
+					mode: activeMode,
+					probeUrl: overrideProbeUrl.trim() || undefined,
+					method: overrideMethod.trim() || undefined,
+					bodyTemplate: overrideBody || undefined,
+					headers: headersOverride,
 					save: saveBatch
 				}),
 				signal: abortController.signal
@@ -220,8 +317,16 @@
 	}
 
 	function runDiagnostic() {
-		pairsText = DIAGNOSTIC_PAIR;
-		void runCheck([{ email: 'ooyeleye0@gmail.com', orderRef: 'LDG3530088' }]);
+		if (mode === 'email') {
+			pairsText = DIAGNOSTIC.email;
+			void runCheck([{ email: DIAGNOSTIC.email, orderRef: 'PROBE00000' }], 'email');
+		} else if (mode === 'orderRef') {
+			pairsText = DIAGNOSTIC.orderRef;
+			void runCheck([{ email: 'probe-placeholder@example.com', orderRef: DIAGNOSTIC.orderRef }], 'orderRef');
+		} else {
+			pairsText = `${DIAGNOSTIC.email}, ${DIAGNOSTIC.orderRef}`;
+			void runCheck([{ email: DIAGNOSTIC.email, orderRef: DIAGNOSTIC.orderRef }], 'pair');
+		}
 	}
 
 	function onFile(e: Event) {
@@ -352,9 +457,28 @@
 	<div class="grid gap-5 xl:grid-cols-3">
 		<div class="xl:col-span-2 space-y-4">
 			<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+				<div class="mb-3 flex flex-wrap items-center gap-2">
+					<span class="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Mode</span>
+					<div class="inline-flex overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--input)]/40 text-[11px]">
+						{#each [['pair', 'Email + Order Ref'], ['email', 'Email only'], ['orderRef', 'Order ref only']] as [val, label]}
+							<button
+								type="button"
+								onclick={() => (mode = val as Mode)}
+								class="px-3 py-1.5 transition-soft {mode === val ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]'}"
+							>
+								{label}
+							</button>
+						{/each}
+					</div>
+					<span class="ml-auto text-[10px] text-[var(--muted-foreground)]">
+						{#if mode === 'pair'}One <code class="font-mono">email, orderRef</code> per line{/if}
+						{#if mode === 'email'}One email per line — order ref filled with placeholder{/if}
+						{#if mode === 'orderRef'}One order ref per line — email filled with placeholder{/if}
+					</span>
+				</div>
 				<div class="flex items-center justify-between gap-2">
 					<label for="pairs-input" class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-						Pairs
+						{#if mode === 'pair'}Pairs{:else if mode === 'email'}Emails{:else}Order refs{/if}
 					</label>
 					<div class="flex items-center gap-2">
 						<input
@@ -388,8 +512,94 @@
 					rows="9"
 					spellcheck="false"
 					class="mt-2 w-full rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 font-mono text-[12px] text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none"
-					placeholder="ooyeleye0@gmail.com, LDG3530088"
+					placeholder={mode === 'pair'
+						? 'ooyeleye0@gmail.com, LDG3530088'
+						: mode === 'email'
+							? 'ooyeleye0@gmail.com'
+							: 'LDG3530088'}
 				></textarea>
+
+				<details class="mt-4 rounded-lg border border-[var(--border)] bg-[var(--input)]/20" bind:open={showAdvanced}>
+					<summary class="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+						Advanced — per-batch probe overrides (URL / body / headers / cURL import)
+					</summary>
+					<div class="space-y-3 border-t border-[var(--border)] p-3">
+						<div>
+							<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+								Paste cURL from DevTools
+							</label>
+							<textarea
+								bind:value={curlInput}
+								rows="3"
+								spellcheck="false"
+								placeholder={'curl \'https://my-order.ledger.com/api/...\' \\\n  -H \'cookie: ...\' \\\n  --data-raw \'{"email":"...","orderReference":"..."}\''}
+								class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+							></textarea>
+							<div class="mt-2 flex flex-wrap items-center gap-2">
+								<button
+									type="button"
+									onclick={importCurl}
+									disabled={importingCurl}
+									class="flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-[11px] text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50"
+								>
+									{#if importingCurl}<Loader2 size={11} class="animate-spin" />{:else}<FileUp size={11} />{/if}
+									Parse cURL
+								</button>
+								<button
+									type="button"
+									onclick={clearOverrides}
+									class="flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-[11px] text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+								>
+									<Square size={10} /> Clear overrides
+								</button>
+								<span class="text-[10px] text-[var(--muted-foreground)]">
+									In Chrome DevTools → Network → right-click the login request → Copy → Copy as cURL.
+								</span>
+							</div>
+						</div>
+
+						<div class="grid gap-2 sm:grid-cols-4">
+							<label class="block sm:col-span-3">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Probe URL (override)</span>
+								<input
+									bind:value={overrideProbeUrl}
+									placeholder="(leave blank = use Settings default)"
+									class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								/>
+							</label>
+							<label class="block">
+								<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Method</span>
+								<input
+									bind:value={overrideMethod}
+									placeholder="POST"
+									class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+								/>
+							</label>
+						</div>
+
+						<label class="block">
+							<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Body template (override)</span>
+							<textarea
+								bind:value={overrideBody}
+								rows="3"
+								spellcheck="false"
+								placeholder={'{"email":"{{email}}","orderReference":"{{orderRef}}"}'}
+								class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+							></textarea>
+						</label>
+
+						<label class="block">
+							<span class="block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Headers JSON (override)</span>
+							<textarea
+								bind:value={overrideHeadersJson}
+								rows="5"
+								spellcheck="false"
+								placeholder="(leave blank = use Settings default)"
+								class="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+							></textarea>
+						</label>
+					</div>
+				</details>
 
 				<div class="mt-4 grid gap-3 sm:grid-cols-4">
 					<label class="block">
@@ -630,16 +840,24 @@
 			<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 text-xs text-[var(--muted-foreground)]">
 				<h2 class="text-sm font-semibold text-[var(--foreground)]">How it works</h2>
 				<p class="mt-2 leading-relaxed">
-					Each pair is POSTed to the configured Ledger probe URL. We measure the response time of N runs
-					(default {config?.runs ?? 2}) and use the median. A pair is marked
-					<span class="font-medium text-emerald-300">valid</span> when the response is OK and the median
-					latency is greater than or equal to the threshold — valid lookups hit Ledger's DB and respond
-					noticeably slower than fast 4xx rejections.
+					Each pair is POSTed to the configured probe URL. We measure response time across N runs
+					(default {config?.runs ?? 2}) and use the median. A row is marked
+					<span class="font-medium text-emerald-300">valid</span> when the response succeeds and the
+					median latency is greater than or equal to the threshold.
 				</p>
 				<p class="mt-3 leading-relaxed">
 					If you see <span class="font-medium text-amber-300">Error</span> rows (timeouts, 403/Cloudflare,
-					5xx) the timing classification can't be trusted — adjust headers/proxy in Settings.
+					5xx) the timing classification can't be trusted — adjust headers in Settings.
 				</p>
+				<div class="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
+					<strong class="block">Ledger note:</strong>
+					<code class="font-mono">my-order.ledger.com</code> is behind Cloudflare Managed Challenge.
+					GET requests get blocked, but POSTs with the right Origin/Referer pass through to the
+					real Symfony backend. The exact API path isn't published — open the login page in your
+					browser, submit a real pair with DevTools open, then <strong>Copy as cURL</strong> from
+					the Network tab and paste it into the Advanced panel. The panel auto-fills the URL,
+					method, headers, and body template.
+				</div>
 			</div>
 		</div>
 	</div>

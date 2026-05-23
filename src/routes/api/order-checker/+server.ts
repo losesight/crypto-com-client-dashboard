@@ -16,25 +16,57 @@ import {
 	loadOrderCheckerConfig,
 	parseOrderPairs,
 	runOrderCheckBatch,
+	DUMMY_EMAIL,
+	DUMMY_ORDER_REF,
 	type OrderPair,
-	type OrderProbeResult
+	type OrderProbeResult,
+	type ProbeMode
 } from '$lib/server/orderChecker.js';
 
 const MAX_PAIRS = 500;
+const ALLOWED_MODES = new Set<ProbeMode>(['pair', 'email', 'orderRef']);
 
-function normalisePairs(input: unknown): OrderPair[] {
+function pickMode(input: unknown): ProbeMode {
+	const m = String(input || 'pair') as ProbeMode;
+	return ALLOWED_MODES.has(m) ? m : 'pair';
+}
+
+function normalisePairs(input: unknown, mode: ProbeMode): OrderPair[] {
 	if (typeof input === 'string') {
-		return parseOrderPairs(input).pairs;
+		return parseOrderPairs(input, mode).pairs;
 	}
 	if (!Array.isArray(input)) return [];
 	const out: OrderPair[] = [];
 	for (const raw of input) {
-		if (!raw || typeof raw !== 'object') continue;
+		if (raw == null) continue;
+		if (typeof raw === 'string') {
+			const token = raw.trim();
+			if (!token) continue;
+			if (mode === 'email') out.push({ email: token, orderRef: DUMMY_ORDER_REF });
+			else if (mode === 'orderRef') out.push({ email: DUMMY_EMAIL, orderRef: token });
+			continue;
+		}
+		if (typeof raw !== 'object') continue;
 		const email = String((raw as { email?: unknown }).email || '').trim();
 		const orderRef = String((raw as { orderRef?: unknown }).orderRef || '').trim();
-		if (email && orderRef) out.push({ email, orderRef });
+		if (mode === 'email') {
+			if (email) out.push({ email, orderRef: DUMMY_ORDER_REF });
+		} else if (mode === 'orderRef') {
+			if (orderRef) out.push({ email: DUMMY_EMAIL, orderRef });
+		} else if (email && orderRef) {
+			out.push({ email, orderRef });
+		}
 	}
 	return out;
+}
+
+function normaliseHeaders(input: unknown): Record<string, string> | undefined {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+		if (typeof v === 'string') out[k] = v;
+	}
+	return Object.keys(out).length ? out : undefined;
 }
 
 export const GET: RequestHandler = async ({ locals, url }) => {
@@ -68,16 +100,27 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		threshold?: number;
 		concurrency?: number;
 		runs?: number;
+		mode?: string;
+		probeUrl?: string;
+		method?: string;
+		bodyTemplate?: string;
+		headers?: unknown;
 		save?: boolean;
 	};
 
-	const pairs = normalisePairs(body.pairs).slice(0, MAX_PAIRS);
+	const mode = pickMode(body.mode);
+	const pairs = normalisePairs(body.pairs, mode).slice(0, MAX_PAIRS);
 	if (pairs.length === 0) throw error(400, 'no valid pairs provided');
 
 	const opts = {
 		threshold: typeof body.threshold === 'number' ? body.threshold : undefined,
 		concurrency: typeof body.concurrency === 'number' ? body.concurrency : undefined,
-		runs: typeof body.runs === 'number' ? body.runs : undefined
+		runs: typeof body.runs === 'number' ? body.runs : undefined,
+		mode,
+		probeUrlOverride: typeof body.probeUrl === 'string' && body.probeUrl.trim() ? body.probeUrl.trim() : undefined,
+		methodOverride: typeof body.method === 'string' && body.method.trim() ? body.method.trim() : undefined,
+		bodyTemplateOverride: typeof body.bodyTemplate === 'string' ? body.bodyTemplate : undefined,
+		headersOverride: normaliseHeaders(body.headers)
 	};
 
 	const encoder = new TextEncoder();
@@ -90,7 +133,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 				controller.enqueue(encoder.encode(JSON.stringify(payload) + '\n'));
 			};
 
-			send({ type: 'start', total: pairs.length, ...opts });
+			send({ type: 'start', total: pairs.length, mode });
 
 			const collected: OrderProbeResult[] = [];
 
@@ -108,7 +151,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 					try {
 						const saved = dbInsertOrderBatch({
 							createdBy: username,
-							summary,
+							summary: { ...summary, mode },
 							results: collected
 						});
 						batchId = saved.id;
@@ -120,7 +163,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 					}
 				}
 
-				send({ type: 'summary', summary, batchId });
+				send({ type: 'summary', summary, batchId, mode });
 			} catch (err) {
 				send({
 					type: 'error',

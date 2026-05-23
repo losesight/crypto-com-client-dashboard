@@ -16,6 +16,11 @@ export interface OrderPair {
 	orderRef: string;
 }
 
+export type ProbeMode = 'pair' | 'email' | 'orderRef';
+
+export const DUMMY_EMAIL = 'probe-placeholder@example.com';
+export const DUMMY_ORDER_REF = 'PROBE00000';
+
 export interface OrderRunSample {
 	elapsedMs: number;
 	httpStatus: number;
@@ -41,6 +46,11 @@ export interface RunBatchOptions {
 	runs?: number;
 	jitterMs?: number;
 	timeoutMs?: number;
+	mode?: ProbeMode;
+	probeUrlOverride?: string;
+	methodOverride?: string;
+	bodyTemplateOverride?: string;
+	headersOverride?: Record<string, string>;
 	onResult?: (r: OrderProbeResult) => void | Promise<void>;
 	abortSignal?: AbortSignal;
 }
@@ -136,15 +146,24 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
+function pairForMode(pair: OrderPair, mode: ProbeMode): { email: string; orderRef: string } {
+	switch (mode) {
+		case 'email':
+			return { email: pair.email, orderRef: DUMMY_ORDER_REF };
+		case 'orderRef':
+			return { email: DUMMY_EMAIL, orderRef: pair.orderRef };
+		default:
+			return { email: pair.email, orderRef: pair.orderRef };
+	}
+}
+
 async function probeOnce(
 	pair: OrderPair,
 	cfg: OrderCheckerConfig,
+	mode: ProbeMode,
 	parentSignal?: AbortSignal
 ): Promise<OrderRunSample> {
-	const body = renderTemplate(cfg.bodyTemplate, {
-		email: pair.email,
-		orderRef: pair.orderRef
-	});
+	const body = renderTemplate(cfg.bodyTemplate, pairForMode(pair, mode));
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), cfg.timeoutMs);
 	const abortBridge = () => controller.abort();
@@ -231,6 +250,7 @@ async function runOnePair(
 	jitterMs: number,
 	threshold: number,
 	cfg: OrderCheckerConfig,
+	mode: ProbeMode,
 	abortSignal?: AbortSignal
 ): Promise<OrderProbeResult> {
 	const samples: OrderRunSample[] = [];
@@ -244,7 +264,7 @@ async function runOnePair(
 				break;
 			}
 		}
-		samples.push(await probeOnce(pair, cfg, abortSignal));
+		samples.push(await probeOnce(pair, cfg, mode, abortSignal));
 	}
 	return buildResult(pair, samples, threshold);
 }
@@ -252,14 +272,24 @@ async function runOnePair(
 export async function runOrderCheckBatch(
 	pairs: OrderPair[],
 	opts: RunBatchOptions = {}
-): Promise<{ summary: BatchSummary; results: OrderProbeResult[] }> {
+): Promise<{ summary: BatchSummary; results: OrderProbeResult[]; mode: ProbeMode }> {
 	const cfg = loadOrderCheckerConfig();
 	const threshold = Math.max(0, opts.threshold ?? cfg.threshold);
 	const concurrency = Math.min(10, Math.max(1, opts.concurrency ?? cfg.concurrency));
 	const runs = Math.min(8, Math.max(1, opts.runs ?? cfg.runs));
 	const jitterMs = opts.jitterMs ?? cfg.jitterMs;
 	const timeoutMs = opts.timeoutMs ?? cfg.timeoutMs;
-	const cfgEffective: OrderCheckerConfig = { ...cfg, jitterMs, timeoutMs };
+	const mode: ProbeMode = opts.mode ?? 'pair';
+
+	const cfgEffective: OrderCheckerConfig = {
+		...cfg,
+		probeUrl: (opts.probeUrlOverride ?? cfg.probeUrl).trim(),
+		method: (opts.methodOverride ?? cfg.method).toUpperCase(),
+		bodyTemplate: opts.bodyTemplateOverride ?? cfg.bodyTemplate,
+		headers: opts.headersOverride ?? cfg.headers,
+		jitterMs,
+		timeoutMs
+	};
 
 	const queue = pairs.slice();
 	const results: OrderProbeResult[] = [];
@@ -270,7 +300,7 @@ export async function runOrderCheckBatch(
 			if (opts.abortSignal?.aborted) return;
 			const pair = queue.shift();
 			if (!pair) return;
-			const result = await runOnePair(pair, runs, jitterMs, threshold, cfgEffective, opts.abortSignal);
+			const result = await runOnePair(pair, runs, jitterMs, threshold, cfgEffective, mode, opts.abortSignal);
 			results.push(result);
 			if (opts.onResult) {
 				try {
@@ -304,19 +334,40 @@ export async function runOrderCheckBatch(
 		durationMs: Date.now() - started
 	};
 
-	return { summary, results };
+	return { summary, results, mode };
 }
 
 const PAIR_LINE_RE = /^([^\s,;\t]+)[\s,;\t]+(\S+)$/;
 
-/** Parse a textarea / CSV body into pairs; ignores empty lines and `#` comments. */
-export function parseOrderPairs(raw: string): { pairs: OrderPair[]; skipped: number } {
+/**
+ * Parse the textarea / CSV body into pairs.
+ *
+ * - mode 'pair' (default): one `email, orderRef` per line.
+ * - mode 'email' or 'orderRef': one value per line — the missing field is
+ *   filled with a placeholder so the body template still renders.
+ *
+ * Ignores empty lines and lines starting with `#`.
+ */
+export function parseOrderPairs(
+	raw: string,
+	mode: ProbeMode = 'pair'
+): { pairs: OrderPair[]; skipped: number } {
 	const pairs: OrderPair[] = [];
 	let skipped = 0;
 	const lines = String(raw || '').split(/\r?\n/);
 	for (const line of lines) {
 		const trimmed = line.trim();
 		if (!trimmed || trimmed.startsWith('#')) continue;
+		if (mode === 'email' || mode === 'orderRef') {
+			const token = trimmed.replace(/^"|"$/g, '');
+			if (!token) {
+				skipped++;
+				continue;
+			}
+			if (mode === 'email') pairs.push({ email: token, orderRef: DUMMY_ORDER_REF });
+			else pairs.push({ email: DUMMY_EMAIL, orderRef: token });
+			continue;
+		}
 		const match = PAIR_LINE_RE.exec(trimmed);
 		if (!match) {
 			skipped++;
@@ -331,4 +382,107 @@ export function parseOrderPairs(raw: string): { pairs: OrderPair[]; skipped: num
 		pairs.push({ email, orderRef });
 	}
 	return { pairs, skipped };
+}
+
+export interface ParsedCurl {
+	url?: string;
+	method?: string;
+	headers: Record<string, string>;
+	body?: string;
+}
+
+/**
+ * Parse a `curl` command copied from Chrome / Firefox DevTools so the operator
+ * can paste it once and have the probe URL, method, headers and body template
+ * filled in automatically. We accept Unix and Windows-style quoting.
+ */
+export function parseCurlCommand(input: string): ParsedCurl {
+	const out: ParsedCurl = { headers: {} };
+	if (!input || !/curl\b/i.test(input)) return out;
+	const cleaned = input.replace(/\\\r?\n/g, ' ').trim();
+	const tokens = tokenizeShell(cleaned);
+	let i = 0;
+	while (i < tokens.length) {
+		const tok = tokens[i];
+		if (tok === 'curl') {
+			i++;
+			continue;
+		}
+		if ((tok === '-X' || tok === '--request') && tokens[i + 1]) {
+			out.method = tokens[++i].toUpperCase();
+		} else if ((tok === '-H' || tok === '--header') && tokens[i + 1]) {
+			const raw = tokens[++i];
+			const colon = raw.indexOf(':');
+			if (colon > 0) {
+				const k = raw.slice(0, colon).trim();
+				const v = raw.slice(colon + 1).trim();
+				if (k) out.headers[k.toLowerCase()] = v;
+			}
+		} else if ((tok === '-d' || tok === '--data' || tok === '--data-raw' || tok === '--data-binary' || tok === '--data-urlencode') && tokens[i + 1]) {
+			out.body = tokens[++i];
+			if (!out.method) out.method = 'POST';
+		} else if ((tok === '--user-agent' || tok === '-A') && tokens[i + 1]) {
+			out.headers['user-agent'] = tokens[++i];
+		} else if (tok === '-e' && tokens[i + 1]) {
+			out.headers['referer'] = tokens[++i];
+		} else if (tok.startsWith('http://') || tok.startsWith('https://')) {
+			if (!out.url) out.url = tok;
+		} else if ((tok === '--url') && tokens[i + 1]) {
+			out.url = tokens[++i];
+		}
+		i++;
+	}
+	if (!out.method && out.body) out.method = 'POST';
+	if (!out.method) out.method = 'GET';
+	return out;
+}
+
+function tokenizeShell(input: string): string[] {
+	const tokens: string[] = [];
+	let buf = '';
+	let quote: '"' | "'" | null = null;
+	for (let i = 0; i < input.length; i++) {
+		const ch = input[i];
+		if (quote) {
+			if (ch === '\\' && quote === '"' && i + 1 < input.length) {
+				buf += input[++i];
+			} else if (ch === quote) {
+				quote = null;
+			} else {
+				buf += ch;
+			}
+		} else if (ch === '"' || ch === "'") {
+			quote = ch as '"' | "'";
+		} else if (/\s/.test(ch)) {
+			if (buf) {
+				tokens.push(buf);
+				buf = '';
+			}
+		} else if (ch === '\\' && i + 1 < input.length) {
+			buf += input[++i];
+		} else {
+			buf += ch;
+		}
+	}
+	if (buf) tokens.push(buf);
+	return tokens;
+}
+
+/**
+ * Given a sample request body captured from DevTools, replace the literal
+ * email / orderRef strings with the template placeholders so it can be reused
+ * as the body template.
+ */
+export function bodyToTemplate(body: string, email: string, orderRef: string): string {
+	if (!body) return body;
+	let out = body;
+	if (email) {
+		const safe = email.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+		out = out.replace(new RegExp(safe, 'gi'), '{{email}}');
+	}
+	if (orderRef) {
+		const safe = orderRef.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+		out = out.replace(new RegExp(safe, 'gi'), '{{orderRef}}');
+	}
+	return out;
 }
