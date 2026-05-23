@@ -163,8 +163,19 @@
 		confirmDelete = null;
 	}
 
+	let confirmClearAll = $state(false);
+
+	function performClearAll() {
+		if (!wsSend('visitors:delete', {})) return;
+		rows = [];
+		total = 0;
+		toast.success('All sessions cleared');
+		confirmClearAll = false;
+	}
+
 	function handleEsc(e: KeyboardEvent) {
 		if (e.key !== 'Escape') return;
+		if (confirmClearAll) { confirmClearAll = false; return; }
 		if (redirectEditor) redirectEditor = null;
 		else if (last2Editor) last2Editor = null;
 		else if (emailEditor) emailEditor = null;
@@ -298,6 +309,14 @@
 			>
 				<RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
 				Refresh
+			</button>
+			<button
+				onclick={() => (confirmClearAll = true)}
+				disabled={rows.length === 0}
+				class="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 transition-soft hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+			>
+				<Trash2 size={12} />
+				Clear All
 			</button>
 		</div>
 	</div>
@@ -642,6 +661,51 @@
 					class="rounded-lg bg-[var(--destructive)] px-4 py-2 text-sm font-medium text-white transition-soft hover:opacity-90"
 				>
 					Delete session
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if confirmClearAll}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+		onclick={() => (confirmClearAll = false)}
+		onkeydown={(e) => e.key === 'Escape' && (confirmClearAll = false)}
+	>
+		<div
+			class="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
+			role="document"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+		>
+			<div class="flex items-start gap-3">
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--destructive)]/15 text-[var(--destructive)]">
+					<AlertCircle size={16} />
+				</div>
+				<div>
+					<h3 class="text-base font-semibold text-[var(--foreground)]">Clear all sessions?</h3>
+					<p class="mt-2 text-sm text-[var(--muted-foreground)]">
+						This will permanently delete <span class="font-semibold text-[var(--foreground)]">all {total} visitor sessions</span>,
+						their flow progress, and disconnect everyone. This cannot be undone.
+					</p>
+				</div>
+			</div>
+			<div class="mt-6 flex justify-end gap-2">
+				<button
+					onclick={() => (confirmClearAll = false)}
+					class="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={performClearAll}
+					class="rounded-lg bg-[var(--destructive)] px-4 py-2 text-sm font-medium text-white transition-soft hover:opacity-90"
+				>
+					Clear all sessions
 				</button>
 			</div>
 		</div>
