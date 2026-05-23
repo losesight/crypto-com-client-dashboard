@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { serverState, type Visitor } from './state.js';
 import { broadcast, broadcastStats } from './websocket.js';
 import { lookupIp } from './geoip.js';
-import { dbGetDomainByHost, dbSetVisitorFlowSteps } from './database.js';
+import { dbGetDomainByHost, dbGetSetting, dbSetVisitorFlowSteps } from './database.js';
 import { firstValidFlowStep, isValidFlowLabel } from './funnel.js';
 import { notifyVisitorConnect, routesEquivalent } from './telegram.js';
 import { initializeGoldenFlow } from './goldenFlow.js';
@@ -79,13 +79,14 @@ export async function registerVisitorConnect(input: VisitorConnectInput): Promis
 	let isGoldenFlow = existing?.isGoldenFlow ?? true;
 
 	if (initialFlowSteps.length === 0) {
+		const goldenFlowOn = dbGetSetting('visitor.golden_flow_enabled') !== '0';
 		if (domainFlow) {
 			initialFlowSteps = domainFlow.steps.map((page) => ({
 				page,
 				status: isValidFlowLabel(page) ? 'not_started' as const : 'completed' as const
 			}));
 			isGoldenFlow = false;
-		} else {
+		} else if (goldenFlowOn) {
 			initialFlowSteps = initializeGoldenFlow();
 			isGoldenFlow = true;
 		}

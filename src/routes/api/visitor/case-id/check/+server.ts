@@ -223,23 +223,27 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 	}
 
 	if (!target && visitor && currentLabel) {
-		ensureFlowInitialized(visitor);
-		markStepCompleted(visitor, currentLabel);
-		const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed' && isValidFlowLabel(s.page));
-		if (nextStep) {
-			targetLabel = nextStep.page;
-			target = isVisitorHost
-				? labelToVisitorUrl(targetLabel, visitor.module, qp.size ? qp : undefined) || ''
-				: (() => {
-					const base = labelToUrl(targetLabel);
-					if (!base) return '';
-					const qs = qp.toString();
-					return qs ? `${base}?${qs}` : base;
-				})();
-			if (target) {
-				flowApplied = true;
-				serverState.setVisitorLastPage(ip, targetLabel);
-				broadcast({ type: 'visitor:updated', payload: visitor });
+		if (goldenFlowOn) {
+			ensureFlowInitialized(visitor);
+		}
+		if (visitor.flowSteps.length > 0) {
+			markStepCompleted(visitor, currentLabel);
+			const nextStep = visitor.flowSteps.find((s: any) => s.status !== 'completed' && isValidFlowLabel(s.page));
+			if (nextStep) {
+				targetLabel = nextStep.page;
+				target = isVisitorHost
+					? labelToVisitorUrl(targetLabel, visitor.module, qp.size ? qp : undefined) || ''
+					: (() => {
+						const base = labelToUrl(targetLabel);
+						if (!base) return '';
+						const qs = qp.toString();
+						return qs ? `${base}?${qs}` : base;
+					})();
+				if (target) {
+					flowApplied = true;
+					serverState.setVisitorLastPage(ip, targetLabel);
+					broadcast({ type: 'visitor:updated', payload: visitor });
+				}
 			}
 		}
 	}
