@@ -4,6 +4,7 @@ import {
 	dbGetUserByUsername,
 	dbRenameUserUsername,
 	dbUpdateUserProfile,
+	dbDeleteSessionsByUser,
 	hashPassword
 } from '$lib/server/database.js';
 
@@ -52,6 +53,7 @@ export const PATCH: RequestHandler = async ({ locals, request }) => {
 
 	if (passwordChanged && nextPassword) {
 		dbUpdateUserProfile(userId, { passwordHash: hashPassword(nextPassword) });
+		dbDeleteSessionsByUser(userId);
 	}
 
 	const user = {

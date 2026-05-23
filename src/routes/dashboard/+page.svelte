@@ -12,9 +12,10 @@
 		RefreshCw,
 		Server
 	} from 'lucide-svelte';
-	import { stats, sendMessage } from '$lib/stores/websocket';
+	import { stats, sendMessage, connected } from '$lib/stores/websocket';
 	import { getGreeting } from '$lib/utils/time';
 	import ConnectionBadge from '$lib/components/ConnectionBadge.svelte';
+	import { onMount } from 'svelte';
 
 	let username = $derived($page.data.user?.username ?? 'admin');
 	let now = $state(new Date());
@@ -27,9 +28,25 @@
 		return () => clearInterval(timer);
 	});
 
+	async function fetchStatsRest() {
+		try {
+			const res = await fetch('/api/stats');
+			if (res.ok) {
+				const data = await res.json();
+				if (data.stats) stats.set(data.stats);
+			}
+		} catch { /* non-critical */ }
+	}
+
+	onMount(() => { fetchStatsRest(); });
+
 	function refreshStats() {
 		refreshing = true;
-		sendMessage('stats:request', {});
+		if ($connected) {
+			sendMessage('stats:request', {});
+		} else {
+			fetchStatsRest();
+		}
 		setTimeout(() => (refreshing = false), 600);
 	}
 

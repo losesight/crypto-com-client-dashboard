@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { json, error } from '@sveltejs/kit';
 import { dbGetSetting, dbSetSetting } from '$lib/server/database.js';
+import { requireAdmin } from '$lib/server/auth.js';
 
 const BOOL_KEYS = [
 	'visitor.site_enabled',
@@ -43,7 +44,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 };
 
 export const POST: RequestHandler = async ({ locals, request }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const body = (await request.json()) as Record<string, boolean | string>;
 	for (const [k, v] of Object.entries(body)) {
 		if (!ALL_KEYS.includes(k)) continue;

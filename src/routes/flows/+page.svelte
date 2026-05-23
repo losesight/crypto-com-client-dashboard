@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GitGraph, Plus, Trash2, ListPlus, X, ShieldCheck } from 'lucide-svelte';
+	import { GitGraph, Plus, Trash2, ListPlus, X, ShieldCheck, ChevronUp, ChevronDown } from 'lucide-svelte';
 	import { flows, sendMessage } from '$lib/stores/websocket';
 	import { toast } from '$lib/stores/toast';
 	import { templates } from '$lib/templates';
@@ -108,6 +108,16 @@
 		const next = flow.steps.filter((_, i) => i !== idx);
 		wsSend('flow:update', { ...flow, steps: next });
 	}
+
+	function moveStep(flowId: string, idx: number, direction: -1 | 1) {
+		const flow = $flows.find((f) => f.id === flowId);
+		if (!flow) return;
+		const target = idx + direction;
+		if (target < 0 || target >= flow.steps.length) return;
+		const next = [...flow.steps];
+		[next[idx], next[target]] = [next[target], next[idx]];
+		wsSend('flow:update', { ...flow, steps: next });
+	}
 </script>
 
 <svelte:head>
@@ -194,6 +204,18 @@
 										: 'border-[var(--destructive)]/30 bg-[var(--destructive)]/10 text-[var(--destructive)]'}"
 									title={isValidFlowStep(step) ? undefined : 'Use Brand/Page format (e.g. Coinbase/Case ID)'}
 								>
+									<button
+										onclick={() => moveStep(flow.id, i, -1)}
+										disabled={i === 0}
+										class="rounded p-0.5 text-[var(--text-tertiary)] transition-soft hover:bg-[var(--accent)] disabled:opacity-20 disabled:cursor-default"
+										title="Move up"
+									><ChevronUp size={10} /></button>
+									<button
+										onclick={() => moveStep(flow.id, i, 1)}
+										disabled={i === flow.steps.length - 1}
+										class="rounded p-0.5 text-[var(--text-tertiary)] transition-soft hover:bg-[var(--accent)] disabled:opacity-20 disabled:cursor-default"
+										title="Move down"
+									><ChevronDown size={10} /></button>
 									<span class="text-[var(--text-tertiary)]">{i + 1}.</span>
 									{step}
 									<button

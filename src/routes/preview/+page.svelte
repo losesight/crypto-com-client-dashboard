@@ -173,7 +173,7 @@
 							class="group flex flex-col overflow-hidden rounded-lg border-2 text-left transition-all {active ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5' : 'border-[var(--border)] bg-[var(--card)] hover:border-[var(--border-hover)]'}"
 						>
 							<div class="aspect-video overflow-hidden bg-black/30">
-								<img src={e.thumb} alt={e.key} loading="lazy" class="h-full w-full object-cover object-top transition-transform group-hover:scale-[1.02]" />
+								<img src={e.thumb} alt={e.key} loading="lazy" class="h-full w-full object-cover object-top transition-transform group-hover:scale-[1.02]" onerror={(ev) => { const img = ev.currentTarget; img.style.display = 'none'; const p = img.parentElement; if (p) { p.classList.add('flex','items-center','justify-center'); const s = document.createElement('span'); s.style.color = '#666'; s.style.fontSize = '13px'; s.textContent = 'No preview'; p.appendChild(s); } }} />
 							</div>
 							<div class="p-2.5">
 								<p class="truncate text-[11px] font-semibold text-[var(--foreground)]">{e.module}</p>

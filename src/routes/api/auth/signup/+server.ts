@@ -28,6 +28,10 @@ function rateLimit(ip: string): boolean {
 }
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
+	if (process.env.SIGNUP_ENABLED === '0' || process.env.SIGNUP_ENABLED === 'false') {
+		throw error(403, 'Signup is disabled');
+	}
+
 	const ip = (() => {
 		try {
 			return getClientAddress();

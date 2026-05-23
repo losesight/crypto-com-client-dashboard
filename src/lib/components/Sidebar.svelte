@@ -43,27 +43,31 @@
 	let chatOpen = $state(false);
 	let collapsed = $state(false);
 
-	const panelItems = [
+	const allPanelItems = [
 		{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 		{ href: '/sessions', label: 'Sessions', icon: ListTodo },
-		{ href: '/users', label: 'Users', icon: Users },
-		{ href: '/domains', label: 'Domains', icon: Globe },
+		{ href: '/users', label: 'Users', icon: Users, adminOnly: true },
+		{ href: '/domains', label: 'Domains', icon: Globe, adminOnly: true },
 		{ href: '/flows', label: 'Flows', icon: GitGraph },
 		{ href: '/cases', label: 'Cases', icon: KeyRound },
 		{ href: '/control', label: 'Control', icon: UsersRound }
 	];
 
-	const utilsItems = [
+	const allUtilsItems = [
 		{ href: '/mailer', label: 'Mailer', icon: Mail },
 		{ href: '/templates', label: 'Templates', icon: FileCode },
 		{ href: '/sms', label: 'SMS', icon: MessageSquare },
 		{ href: '/gmail', label: 'Gmail', icon: AtSign },
-		{ href: '/seeds', label: 'Seeds', icon: Database },
-		{ href: '/vault', label: 'Vault', icon: Vault },
+		{ href: '/seeds', label: 'Seeds', icon: Database, adminOnly: true },
+		{ href: '/vault', label: 'Vault', icon: Vault, adminOnly: true },
 		{ href: '/livechat', label: 'Live Chat', icon: Wifi, showLiveDot: true },
 		{ href: '/inbox-filter', label: 'Inbox Filter', icon: Inbox },
 		{ href: '/preview', label: 'Page Preview', icon: Eye }
 	];
+
+	let isAdmin = $derived(role === 'admin');
+	let panelItems = $derived(allPanelItems.filter((i) => !i.adminOnly || isAdmin));
+	let utilsItems = $derived(allUtilsItems.filter((i) => !i.adminOnly || isAdmin));
 
 	let utilsOpen = $state(true);
 	let userMenuOpen = $state(false);

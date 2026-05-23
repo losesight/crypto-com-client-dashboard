@@ -5,9 +5,10 @@ import {
 	resolvePageVars
 } from '$lib/server/pageVars.js';
 import { getSchema } from '$lib/pageVars.js';
+import { requireAdmin } from '$lib/server/auth.js';
 
 export const GET: RequestHandler = async ({ locals, url }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const brand = decodeURIComponent(url.searchParams.get('brand') || '').trim();
 	const page = decodeURIComponent(url.searchParams.get('page') || '').trim();
 	if (!brand || !page) throw error(400, 'brand and page required');
@@ -17,7 +18,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 };
 
 export const PATCH: RequestHandler = async ({ locals, request }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const body = (await request.json().catch(() => ({}))) as {
 		brand?: string;
 		page?: string;

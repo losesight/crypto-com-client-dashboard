@@ -2,14 +2,15 @@ import type { RequestHandler } from './$types';
 import { json, error } from '@sveltejs/kit';
 import { dbGetDomains, dbInsertDomain } from '$lib/server/database.js';
 import { serverState } from '$lib/server/state.js';
+import { requireAdmin } from '$lib/server/auth.js';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	return json({ domains: dbGetDomains() });
 };
 
 export const POST: RequestHandler = async ({ locals, request }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	let body: {
 		domain?: string;
 		module?: string;

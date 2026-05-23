@@ -23,5 +23,4 @@ server.listen(port, () => {
 	console.log(`Server running on http://localhost:${port}`);
 	console.log(`WebSocket available at ws://localhost:${port}/ws`);
 	console.log(`REST API available at http://localhost:${port}/api/*`);
-	console.log(`API Key: ${apiKey}`);
 });

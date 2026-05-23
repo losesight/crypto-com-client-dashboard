@@ -561,7 +561,16 @@ export function setupWebSocket(server: Server): WebSocketServer {
 		clients.add(socket);
 
 		const initPayload = serverState.getInitPayload();
-		socket.send(JSON.stringify({ type: 'init', payload: initPayload }));
+		if (user.role !== 'admin') {
+			const filtered = {
+				...initPayload,
+				users: [],
+				domains: initPayload.domains.map((d: any) => ({ ...d, phishKey: undefined }))
+			};
+			socket.send(JSON.stringify({ type: 'init', payload: filtered }));
+		} else {
+			socket.send(JSON.stringify({ type: 'init', payload: initPayload }));
+		}
 
 		const logEntry = serverState.addLogEntry(`${user.username} signed in`, 'connect');
 		broadcast({ type: 'log:new', payload: logEntry });

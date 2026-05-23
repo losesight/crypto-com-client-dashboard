@@ -1,21 +1,22 @@
 import type { RequestHandler } from './$types';
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { dbSetSetting } from '$lib/server/database.js';
 import { getTelegramConfig, sendTelegram } from '$lib/server/telegram.js';
+import { requireAdmin } from '$lib/server/auth.js';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const cfg = getTelegramConfig();
 	return json({
 		enabled: cfg.enabled,
-		botToken: cfg.botToken,
+		botToken: cfg.botToken ? '****' + cfg.botToken.slice(-4) : '',
 		chatId: cfg.chatId,
 		fields: cfg.fields
 	});
 };
 
 export const POST: RequestHandler = async ({ locals, request }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const body = (await request.json()) as Partial<{
 		enabled: boolean;
 		botToken: string;

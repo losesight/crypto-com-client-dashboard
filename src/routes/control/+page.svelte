@@ -16,7 +16,9 @@
 
 	function pushVisitor() {
 		if (!selectedVisitor) return;
-		wsSend('visitor:push', { ip: selectedVisitor, targetFlow });
+		if (wsSend('visitor:push', { ip: selectedVisitor, targetFlow })) {
+			toast.success(`Pushed ${selectedVisitor} to ${targetFlow}`);
+		}
 	}
 </script>
 
@@ -51,6 +53,13 @@
 				</div>
 
 				<div class="max-h-[600px] overflow-y-auto custom-scrollbar">
+				{#if $visitors.length === 0}
+					<div class="flex flex-col items-center justify-center py-20 text-center">
+						<UsersRound size={32} class="mb-3 text-[var(--text-tertiary)]" />
+						<p class="text-sm font-semibold text-[var(--foreground)]">No active visitors</p>
+						<p class="mt-1 text-xs text-[var(--muted-foreground)]">Visitors will appear here when they connect.</p>
+					</div>
+				{/if}
 					{#each $visitors as visitor (visitor.ip)}
 						<button
 							class="transition-soft-no-bg w-full text-left border-b border-[var(--border-subtle)] p-4 px-5 hover:bg-[var(--accent)]/40 {selectedVisitor === visitor.ip ? 'bg-[var(--accent-primary)]/8 border-l-[3px] border-l-[var(--accent-primary)]' : ''}"

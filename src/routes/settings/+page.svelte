@@ -439,14 +439,13 @@
 							</div>
 						</label>
 
-						<!-- Golden Flow toggle -->
-						<label class="flex items-start gap-3 rounded-lg border {goldenFlowEnabled ? 'border-blue-500/40 bg-blue-500/5' : 'border-[var(--border)] bg-[var(--input)]/30'} p-4 cursor-pointer transition-colors">
-							<input type="checkbox" bind:checked={goldenFlowEnabled} class="mt-1 h-3.5 w-3.5 accent-blue-500" />
+						<!-- Golden Flow (managed on Flows page) -->
+						<div class="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--input)]/30 p-4">
 							<div>
-								<p class="text-sm font-semibold {goldenFlowEnabled ? 'text-blue-400' : 'text-[var(--foreground)]'}">Golden Flow {goldenFlowEnabled ? 'ON' : 'OFF'}</p>
-								<p class="mt-0.5 text-[11px] text-[var(--muted-foreground)]">When on, all visitors follow the 19-step Golden Flow regardless of case code. When off, each case code uses its own assigned flow.</p>
+								<p class="text-sm font-semibold text-[var(--foreground)]">Golden Flow: {goldenFlowEnabled ? 'ON' : 'OFF'}</p>
+								<p class="mt-0.5 text-[11px] text-[var(--muted-foreground)]">Toggle this on the <a href="/flows" class="text-blue-400 hover:underline">Flows</a> page.</p>
 							</div>
-						</label>
+						</div>
 
 						<!-- Landing enabled -->
 						<label class="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--input)]/30 p-4 cursor-pointer">

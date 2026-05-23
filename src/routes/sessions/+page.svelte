@@ -47,6 +47,8 @@
 	let confirmVault: { ip: string; email: string } | null = $state(null);
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+	let initialLoaded = $state(false);
+
 	async function fetchPage() {
 		loading = true;
 		try {
@@ -62,11 +64,20 @@
 			const res = await fetch(`/api/sessions?${params}`);
 			if (res.ok) {
 				const data = await res.json();
-				rows = data.rows;
-				total = data.total;
+				if (data.error) {
+					toast.error(data.error);
+				} else {
+					rows = data.rows;
+					total = data.total;
+				}
+			} else {
+				toast.error('Failed to load sessions');
 			}
+		} catch {
+			toast.error('Network error loading sessions');
 		} finally {
 			loading = false;
+			initialLoaded = true;
 		}
 	}
 
@@ -84,15 +95,16 @@
 		}, 250);
 	}
 
+	let lastWsCount = $state(0);
 	$effect(() => {
 		const list = $wsVisitors;
-		if (list && list.length) {
+		if (list && list.length !== lastWsCount) {
+			lastWsCount = list.length;
 			fetchPage();
 		}
 	});
 
 	onMount(() => {
-		fetchPage();
 		pollTimer = setInterval(() => {
 			if (!$connected) fetchPage();
 		}, 5000);
@@ -363,7 +375,12 @@
 		</div>
 
 		<!-- Rows -->
-		{#if rows.length === 0}
+		{#if loading && !initialLoaded}
+			<div class="flex flex-col items-center justify-center py-20 text-center">
+				<RefreshCw size={20} class="animate-spin text-[var(--muted-foreground)]" />
+				<p class="mt-2 text-xs text-[var(--muted-foreground)]">Loading sessions…</p>
+			</div>
+		{:else if rows.length === 0}
 			<div class="flex flex-col items-center justify-center py-20 text-center">
 				<p class="text-sm font-semibold text-[var(--foreground)]">No sessions</p>
 				<p class="mt-1 text-xs text-[var(--muted-foreground)]">Sessions will appear here as visitors connect.</p>

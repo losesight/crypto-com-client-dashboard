@@ -11,6 +11,7 @@ import { serverState } from '$lib/server/state.js';
 import {
 	GOLDEN_FLOW_STEPS,
 	isStepAllowed,
+	isGoldenFlowStep,
 	resolveNextStep,
 	markStepInProgress,
 	ensureFlowInitialized,
@@ -40,7 +41,6 @@ const PUBLIC_PREFIXES = [
 	'/api/host/',
 	'/api/gmail/callback',
 	'/preview/',
-	'/templates/preview/',
 	'/u/',
 	'/images/',
 	'/_next/',
@@ -98,7 +98,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 
 		const landingEnabled = dbGetSetting('visitor.landing_enabled');
-		if (landingEnabled === 'false') {
+		if (landingEnabled === '0') {
 			console.warn(`[route] 404 landing disabled host=${host} panel=${PANEL_HOST} path=${path}`);
 			return new Response('Not Found', { status: 404 });
 		}
@@ -138,7 +138,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 				ensureFlowInitialized(visitor);
 
 				if (visitor.flowSteps.length > 0) {
-					if (!isStepAllowed(visitor.flowSteps, requestedLabel)) {
+					const inFlow = visitor.flowSteps.some((s) => s.page === requestedLabel);
+					const isUtilityPage = requestedLabel === 'Coinbase/Loading';
+					if (!inFlow && !isUtilityPage) {
 						const nextLabel = resolveNextStep(visitor.flowSteps);
 						if (nextLabel) {
 							const redirectUrl = flowStepToUrl(nextLabel, domain.module);
@@ -149,7 +151,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 								});
 							}
 						}
-					} else {
+					} else if (inFlow && !isStepAllowed(visitor.flowSteps, requestedLabel)) {
+						const nextLabel = resolveNextStep(visitor.flowSteps);
+						if (nextLabel) {
+							const redirectUrl = flowStepToUrl(nextLabel, domain.module);
+							if (redirectUrl && redirectUrl !== path) {
+								return new Response(null, {
+									status: 302,
+									headers: { Location: redirectUrl }
+								});
+							}
+						}
+					} else if (inFlow) {
 						markStepInProgress(visitor, requestedLabel);
 					}
 				}

