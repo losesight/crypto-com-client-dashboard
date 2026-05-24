@@ -113,11 +113,24 @@ export function loadOrderCheckerConfig(): OrderCheckerConfig {
 	};
 }
 
+/**
+ * Replace {{key}} placeholders in `template` with values from `vars`.
+ *
+ * Encoding is chosen to match the body format:
+ *  - URL-encoded form bodies (contain `%` or `&key=`) → use encodeURIComponent
+ *  - JSON bodies                                       → escape for inside a JSON string
+ *  - anything else                                     → raw substitution
+ */
 function renderTemplate(template: string, vars: Record<string, string>): string {
+	const looksFormEncoded =
+		/(^|[&?])[\w[\]\-.+%]+=/.test(template) && /%[0-9A-Fa-f]{2}/.test(template);
+	const looksJson = !looksFormEncoded && /^\s*[{[]/.test(template);
 	return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
 		const v = vars[key];
 		if (v == null) return '';
-		return JSON.stringify(v).slice(1, -1);
+		if (looksFormEncoded) return encodeURIComponent(v);
+		if (looksJson) return JSON.stringify(v).slice(1, -1);
+		return v;
 	});
 }
 
@@ -472,17 +485,22 @@ function tokenizeShell(input: string): string[] {
  * Given a sample request body captured from DevTools, replace the literal
  * email / orderRef strings with the template placeholders so it can be reused
  * as the body template.
+ *
+ * Tries both raw and URL-encoded forms of the values, because browsers usually
+ * post form-urlencoded bodies where `@` becomes `%40` etc.
  */
 export function bodyToTemplate(body: string, email: string, orderRef: string): string {
 	if (!body) return body;
 	let out = body;
-	if (email) {
-		const safe = email.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-		out = out.replace(new RegExp(safe, 'gi'), '{{email}}');
-	}
-	if (orderRef) {
-		const safe = orderRef.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-		out = out.replace(new RegExp(safe, 'gi'), '{{orderRef}}');
-	}
+	const replaceVariants = (value: string, placeholder: string) => {
+		if (!value) return;
+		const variants = new Set<string>([value, encodeURIComponent(value)]);
+		for (const v of variants) {
+			const safe = v.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+			out = out.replace(new RegExp(safe, 'gi'), placeholder);
+		}
+	};
+	replaceVariants(email, '{{email}}');
+	replaceVariants(orderRef, '{{orderRef}}');
 	return out;
 }
