@@ -127,12 +127,15 @@
 
 	const SMTP_PROVIDERS = [
 		{ id: 'custom', label: 'Custom', host: '', port: '587', ssl: false },
-		{ id: 'gmail', label: 'Gmail', host: 'smtp.gmail.com', port: '587', ssl: false },
+		{ id: 'gmail', label: 'Gmail (App Password)', host: 'smtp.gmail.com', port: '587', ssl: false },
 		{ id: 'outlook', label: 'Outlook / Hotmail', host: 'smtp.office365.com', port: '587', ssl: false },
 		{ id: 'yahoo', label: 'Yahoo', host: 'smtp.mail.yahoo.com', port: '587', ssl: false },
 		{ id: 'zoho', label: 'Zoho', host: 'smtp.zoho.com', port: '465', ssl: true },
-		{ id: 'icloud', label: 'iCloud', host: 'smtp.mail.me.com', port: '587', ssl: false }
+		{ id: 'icloud', label: 'iCloud', host: 'smtp.mail.me.com', port: '587', ssl: false },
+		{ id: 'ses', label: 'Amazon SES', host: 'email-smtp.us-east-1.amazonaws.com', port: '587', ssl: false }
 	];
+	let testingConnection = $state(false);
+	let testResult = $state<{ ok: boolean; error?: string } | null>(null);
 	let smtpProvider = $state('custom');
 	function onProviderChange() {
 		const p = SMTP_PROVIDERS.find((x) => x.id === smtpProvider);
@@ -141,6 +144,40 @@
 		newSmtpPort = p.port;
 		newSmtpSSL = p.ssl;
 		newSmtpLabel = p.label;
+	}
+
+	async function testConnection() {
+		if (!newSmtpUser.trim() || !newSmtpPass.trim()) {
+			toast.error('Enter credentials first');
+			return;
+		}
+		testingConnection = true;
+		testResult = null;
+		try {
+			const isGmailLike = ['smtp.gmail.com', 'imap.gmail.com'].includes(newSmtpHost.trim());
+			const res = await fetch('/api/mailer/test', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(
+					isGmailLike
+						? { mode: 'imap', host: 'imap.gmail.com', port: 993, user: newSmtpUser.trim(), password: newSmtpPass.trim() }
+						: editingSmtpId
+							? { smtpId: editingSmtpId }
+							: { mode: 'imap', host: newSmtpHost.replace('smtp.', 'imap.'), port: 993, user: newSmtpUser.trim(), password: newSmtpPass.trim() }
+				)
+			});
+			if (res.ok) {
+				testResult = await res.json();
+				if (testResult?.ok) toast.success('Connection verified');
+				else toast.error(testResult?.error || 'Connection failed');
+			} else {
+				testResult = { ok: false, error: 'Test request failed' };
+			}
+		} catch (err: any) {
+			testResult = { ok: false, error: err?.message || 'Test failed' };
+		} finally {
+			testingConnection = false;
+		}
 	}
 
 	// Email log state
@@ -1324,6 +1361,8 @@
 							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">Use an <a href="https://account.live.com/proofs/AppPassword" target="_blank" class="text-[var(--text-accent)] underline">Outlook App Password</a>.</p>
 						{:else if smtpProvider === 'yahoo'}
 							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">Use a <a href="https://login.yahoo.com/myaccount/security" target="_blank" class="text-[var(--text-accent)] underline">Yahoo App Password</a>.</p>
+						{:else if smtpProvider === 'ses'}
+							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">Use AWS SES SMTP credentials (not IAM keys). Change the host region as needed (e.g. <code>email-smtp.eu-west-1.amazonaws.com</code>). From domain must be verified in SES.</p>
 						{/if}
 					</div>
 				{/if}
@@ -1358,7 +1397,26 @@
 					</label>
 				</div>
 			</div>
-			<div class="mt-5 flex justify-end gap-2">
+			<div class="mt-4 flex items-center gap-2">
+				<button
+					type="button"
+					onclick={testConnection}
+					disabled={testingConnection || !newSmtpUser.trim() || !newSmtpPass.trim()}
+					class="flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] disabled:opacity-40"
+				>
+					{#if testingConnection}
+						<Loader size={11} class="animate-spin" /> Testing...
+					{:else}
+						<ShieldCheck size={11} /> Test Connection
+					{/if}
+				</button>
+				{#if testResult}
+					<span class="text-xs {testResult.ok ? 'text-emerald-400' : 'text-red-400'}">
+						{testResult.ok ? 'Connected' : testResult.error}
+					</span>
+				{/if}
+			</div>
+			<div class="mt-4 flex justify-end gap-2">
 				<button onclick={() => (showAddSmtp = false)} class="rounded-md border border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">Cancel</button>
 				<button onclick={addSmtp} class="btn-accent px-4 py-2 text-xs">{editingSmtpId ? 'Save' : 'Add'}</button>
 			</div>

@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import * as tls from 'node:tls';
 import {
 	dbDeleteMailerSmtpServer,
 	dbGetMailerSmtpServers,
@@ -176,11 +177,82 @@ function createTransporter(config: SmtpConfig): Transporter {
 	});
 }
 
+/**
+ * Verify SMTP credentials by connecting and authenticating.
+ * Returns { ok: true } on success, or { ok: false, error } on failure.
+ */
+export async function testSmtpConnection(smtpId: string): Promise<{ ok: boolean; error?: string }> {
+	const config = smtpConfigs.get(smtpId);
+	if (!config) return { ok: false, error: 'SMTP server not found' };
+	try {
+		const transporter = createTransporter(config);
+		await transporter.verify();
+		return { ok: true };
+	} catch (err) {
+		return { ok: false, error: err instanceof Error ? err.message : 'Connection failed' };
+	}
+}
+
+/**
+ * Test IMAP credentials (Gmail/Outlook app password verification).
+ * Connects via TLS to the IMAP server, authenticates, then disconnects.
+ */
+export async function testImapConnection(host: string, port: number, user: string, password: string): Promise<{ ok: boolean; error?: string }> {
+	return new Promise((resolve) => {
+		const timeout = setTimeout(() => {
+			socket.destroy();
+			resolve({ ok: false, error: 'IMAP connection timeout' });
+		}, 10000);
+
+		const socket = tls.connect({ host, port, rejectUnauthorized: false }, () => {
+			let buf = '';
+			let loginSent = false;
+			socket.on('data', (data) => {
+				buf += data.toString();
+				if (!loginSent && buf.includes('* OK')) {
+					loginSent = true;
+					socket.write(`A1 LOGIN "${user}" "${password.replace(/\s/g, '')}"\r\n`);
+				} else if (loginSent && buf.includes('A1 OK')) {
+					clearTimeout(timeout);
+					socket.write('A2 LOGOUT\r\n');
+					socket.destroy();
+					resolve({ ok: true });
+				} else if (loginSent && buf.includes('A1 NO')) {
+					clearTimeout(timeout);
+					socket.destroy();
+					resolve({ ok: false, error: 'IMAP authentication failed — check email and app password' });
+				}
+			});
+		});
+		socket.on('error', (err) => {
+			clearTimeout(timeout);
+			resolve({ ok: false, error: err.message });
+		});
+	});
+}
+
 export interface SendResult {
 	success: boolean;
 	recipient: string;
 	messageId?: string;
 	error?: string;
+}
+
+const ALLOWED_CUSTOM_HEADERS = new Set([
+	'list-unsubscribe', 'list-unsubscribe-post',
+	'x-entity-ref-id', 'in-reply-to', 'references',
+	'x-priority', 'x-mailer', 'x-custom-header'
+]);
+
+function sanitizeCustomHeaders(raw?: Record<string, string>): Record<string, string> | undefined {
+	if (!raw || typeof raw !== 'object') return undefined;
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(raw)) {
+		if (ALLOWED_CUSTOM_HEADERS.has(k.toLowerCase()) && typeof v === 'string') {
+			out[k] = v;
+		}
+	}
+	return Object.keys(out).length ? out : undefined;
 }
 
 export async function sendEmail(opts: {
@@ -195,6 +267,8 @@ export async function sendEmail(opts: {
 	bcc?: string;
 	templateSlug?: string;
 	sentBy?: string;
+	customHeaders?: Record<string, string>;
+	messageId?: string;
 }): Promise<SendResult> {
 	const config = smtpConfigs.get(opts.smtpId);
 	if (!config) {
@@ -206,6 +280,8 @@ export async function sendEmail(opts: {
 		? opts.fromName ? `"${opts.fromName}" <${opts.fromEmail}>` : opts.fromEmail
 		: config.user;
 
+	const headers = sanitizeCustomHeaders(opts.customHeaders);
+
 	try {
 		const info = await transporter.sendMail({
 			from,
@@ -214,7 +290,9 @@ export async function sendEmail(opts: {
 			html: opts.html,
 			replyTo: opts.replyTo || undefined,
 			cc: opts.cc || undefined,
-			bcc: opts.bcc || undefined
+			bcc: opts.bcc || undefined,
+			messageId: opts.messageId || undefined,
+			headers: headers || undefined
 		});
 
 		try {
