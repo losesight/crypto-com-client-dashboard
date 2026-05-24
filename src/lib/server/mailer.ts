@@ -231,6 +231,121 @@ export async function testImapConnection(host: string, port: number, user: strin
 	});
 }
 
+/**
+ * Place a crafted email into a target's INBOX via IMAP APPEND.
+ * Requires the target's IMAP credentials (email + app password).
+ * The email appears in their inbox with whatever From/Subject you set.
+ */
+export async function imapAppendToInbox(opts: {
+	imapHost: string;
+	imapPort: number;
+	targetEmail: string;
+	targetPassword: string;
+	fromName: string;
+	fromEmail: string;
+	subject: string;
+	html: string;
+	textBody?: string;
+	replyTo?: string;
+	folder?: string;
+}): Promise<{ success: boolean; error?: string }> {
+	const folder = opts.folder || 'INBOX';
+	const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+	const date = new Date().toUTCString();
+	const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2)}@${opts.fromEmail.split('@')[1] || 'mail'}>`;
+
+	const fromHeader = opts.fromName
+		? `"${opts.fromName}" <${opts.fromEmail}>`
+		: opts.fromEmail;
+
+	let rawMessage = `From: ${fromHeader}\r\n`;
+	rawMessage += `To: ${opts.targetEmail}\r\n`;
+	if (opts.replyTo) rawMessage += `Reply-To: ${opts.replyTo}\r\n`;
+	rawMessage += `Subject: ${opts.subject}\r\n`;
+	rawMessage += `Date: ${date}\r\n`;
+	rawMessage += `Message-ID: ${messageId}\r\n`;
+	rawMessage += `MIME-Version: 1.0\r\n`;
+	rawMessage += `Content-Type: multipart/alternative; boundary="${boundary}"\r\n`;
+	rawMessage += `\r\n`;
+	rawMessage += `--${boundary}\r\n`;
+	rawMessage += `Content-Type: text/plain; charset="utf-8"\r\n\r\n`;
+	rawMessage += (opts.textBody || opts.subject) + `\r\n`;
+	rawMessage += `--${boundary}\r\n`;
+	rawMessage += `Content-Type: text/html; charset="utf-8"\r\n\r\n`;
+	rawMessage += opts.html + `\r\n`;
+	rawMessage += `--${boundary}--\r\n`;
+
+	const messageBytes = Buffer.from(rawMessage, 'utf-8');
+
+	return new Promise((resolve) => {
+		const timeout = setTimeout(() => {
+			socket.destroy();
+			resolve({ success: false, error: 'IMAP timeout' });
+		}, 15000);
+
+		const socket = tls.connect({
+			host: opts.imapHost,
+			port: opts.imapPort,
+			rejectUnauthorized: false
+		}, () => {
+			let buf = '';
+			let step: 'greeting' | 'login' | 'select' | 'append' | 'literal' | 'done' = 'greeting';
+
+			socket.on('data', (data) => {
+				buf += data.toString();
+
+				if (step === 'greeting' && buf.includes('* OK')) {
+					step = 'login';
+					buf = '';
+					socket.write(`A1 LOGIN "${opts.targetEmail}" "${opts.targetPassword.replace(/\s/g, '')}"\r\n`);
+				} else if (step === 'login') {
+					if (buf.includes('A1 OK')) {
+						step = 'select';
+						buf = '';
+						socket.write(`A2 SELECT "${folder}"\r\n`);
+					} else if (buf.includes('A1 NO') || buf.includes('A1 BAD')) {
+						clearTimeout(timeout);
+						socket.destroy();
+						resolve({ success: false, error: 'IMAP login failed — invalid credentials' });
+					}
+				} else if (step === 'select') {
+					if (buf.includes('A2 OK')) {
+						step = 'append';
+						buf = '';
+						socket.write(`A3 APPEND "${folder}" (\\Seen) {${messageBytes.length}}\r\n`);
+					} else if (buf.includes('A2 NO')) {
+						clearTimeout(timeout);
+						socket.destroy();
+						resolve({ success: false, error: `Folder "${folder}" not found` });
+					}
+				} else if (step === 'append' && buf.includes('+')) {
+					step = 'literal';
+					buf = '';
+					socket.write(messageBytes);
+					socket.write(Buffer.from('\r\n'));
+				} else if (step === 'literal') {
+					if (buf.includes('A3 OK')) {
+						step = 'done';
+						clearTimeout(timeout);
+						socket.write('A4 LOGOUT\r\n');
+						socket.destroy();
+						resolve({ success: true });
+					} else if (buf.includes('A3 NO') || buf.includes('A3 BAD')) {
+						clearTimeout(timeout);
+						socket.destroy();
+						resolve({ success: false, error: 'IMAP APPEND rejected' });
+					}
+				}
+			});
+		});
+
+		socket.on('error', (err) => {
+			clearTimeout(timeout);
+			resolve({ success: false, error: err.message });
+		});
+	});
+}
+
 export interface SendResult {
 	success: boolean;
 	recipient: string;
