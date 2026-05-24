@@ -8,11 +8,12 @@
  * body becomes a reusable template.
  */
 import type { RequestHandler } from './$types';
-import { error, json } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import { requireAdmin } from '$lib/server/auth.js';
 import { bodyToTemplate, parseCurlCommand } from '$lib/server/orderChecker.js';
 
 export const POST: RequestHandler = async ({ locals, request }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const body = (await request.json().catch(() => ({}))) as {
 		curl?: string;
 		sampleEmail?: string;

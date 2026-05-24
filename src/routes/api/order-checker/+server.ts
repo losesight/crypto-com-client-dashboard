@@ -8,6 +8,7 @@
  */
 import type { RequestHandler } from './$types';
 import { error, json } from '@sveltejs/kit';
+import { requireAdmin } from '$lib/server/auth.js';
 import {
 	dbInsertOrderBatch,
 	dbListOrderBatches
@@ -70,7 +71,7 @@ function normaliseHeaders(input: unknown): Record<string, string> | undefined {
 }
 
 export const GET: RequestHandler = async ({ locals, url }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 25));
 	const batches = dbListOrderBatches(limit);
 	const config = loadOrderCheckerConfig();
@@ -94,7 +95,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 };
 
 export const POST: RequestHandler = async ({ locals, request }) => {
-	if (!locals.user) throw error(401, 'Unauthorized');
+	requireAdmin(locals);
 	const body = (await request.json().catch(() => ({}))) as {
 		pairs?: unknown;
 		threshold?: number;
