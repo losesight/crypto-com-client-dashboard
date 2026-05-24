@@ -121,10 +121,10 @@ function handleClientMessage(data: string): void {
 			break;
 		}
 		case 'mailer:send': {
-			const { recipients, templateId, subject, senderEmail, senderName, smtpId, html: emailHtml } = event.payload;
+			const { recipients, templateId, subject, senderEmail, senderName, smtpId, html: emailHtml, replyTo, cc, bcc } = event.payload;
 			const html = emailHtml || '';
 			const logEntry = serverState.addLogEntry(
-				`admin sending campaign to ${recipients.length} recipients (template ${templateId})`,
+				`${user.username} sending campaign to ${recipients.length} recipients (template ${templateId})`,
 				'action'
 			);
 			broadcast({ type: 'log:new', payload: logEntry });
@@ -140,7 +140,12 @@ function handleClientMessage(data: string): void {
 				subject: subject || 'No Subject',
 				html,
 				fromEmail: senderEmail,
-				fromName: senderName
+				fromName: senderName,
+				replyTo: replyTo || undefined,
+				cc: cc || undefined,
+				bcc: bcc || undefined,
+				templateSlug: templateId || '',
+				sentBy: user.username
 			}).then((results) => {
 				const sent = results.filter(r => r.success).length;
 				const failed = results.filter(r => !r.success).length;

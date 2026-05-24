@@ -212,6 +212,25 @@ function migrate(db: Database.Database): void {
 			created_at INTEGER NOT NULL DEFAULT 0
 		);
 
+		CREATE TABLE IF NOT EXISTS email_send_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			smtp_id TEXT NOT NULL DEFAULT '',
+			smtp_label TEXT NOT NULL DEFAULT '',
+			from_email TEXT NOT NULL DEFAULT '',
+			from_name TEXT NOT NULL DEFAULT '',
+			to_addr TEXT NOT NULL,
+			cc TEXT NOT NULL DEFAULT '',
+			bcc TEXT NOT NULL DEFAULT '',
+			reply_to TEXT NOT NULL DEFAULT '',
+			subject TEXT NOT NULL DEFAULT '',
+			template_slug TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending',
+			message_id TEXT NOT NULL DEFAULT '',
+			error TEXT NOT NULL DEFAULT '',
+			sent_by TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL DEFAULT 0
+		);
+
 		CREATE TABLE IF NOT EXISTS livechat_conversations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			visitor_ip TEXT NOT NULL UNIQUE,
@@ -2330,4 +2349,89 @@ export function dbGetOrderBatch(id: string): DbOrderBatch | undefined {
 
 export function dbDeleteOrderBatch(id: string): void {
 	getDb().prepare('DELETE FROM order_checker_batches WHERE id = ?').run(Number(id));
+}
+
+// --------------- Email Send Log ---------------
+
+export interface DbEmailLogRow {
+	id: number;
+	smtpId: string;
+	smtpLabel: string;
+	fromEmail: string;
+	fromName: string;
+	toAddr: string;
+	cc: string;
+	bcc: string;
+	replyTo: string;
+	subject: string;
+	templateSlug: string;
+	status: string;
+	messageId: string;
+	error: string;
+	sentBy: string;
+	createdAt: number;
+}
+
+export function dbInsertEmailLog(row: Omit<DbEmailLogRow, 'id'>): number {
+	const result = getDb().prepare(
+		`INSERT INTO email_send_log (smtp_id, smtp_label, from_email, from_name, to_addr, cc, bcc, reply_to, subject, template_slug, status, message_id, error, sent_by, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	).run(
+		row.smtpId, row.smtpLabel, row.fromEmail, row.fromName, row.toAddr,
+		row.cc, row.bcc, row.replyTo, row.subject, row.templateSlug,
+		row.status, row.messageId, row.error, row.sentBy, row.createdAt || Date.now()
+	);
+	return Number(result.lastInsertRowid);
+}
+
+export function dbQueryEmailLog(opts: {
+	page?: number; limit?: number; search?: string; status?: string;
+}): { rows: DbEmailLogRow[]; total: number } {
+	const page = Math.max(1, opts.page ?? 1);
+	const limit = Math.max(1, Math.min(100, opts.limit ?? 25));
+	const offset = (page - 1) * limit;
+	const conditions: string[] = [];
+	const params: unknown[] = [];
+
+	if (opts.search) {
+		conditions.push('(to_addr LIKE ? OR from_email LIKE ? OR subject LIKE ?)');
+		const q = `%${opts.search}%`;
+		params.push(q, q, q);
+	}
+	if (opts.status === 'success' || opts.status === 'failed') {
+		conditions.push('status = ?');
+		params.push(opts.status);
+	}
+
+	const where = conditions.length ? ' WHERE ' + conditions.join(' AND ') : '';
+	const total = (getDb().prepare(`SELECT COUNT(*) AS cnt FROM email_send_log${where}`).get(...params) as any)?.cnt ?? 0;
+	const rows = getDb().prepare(
+		`SELECT * FROM email_send_log${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	).all(...params, limit, offset) as any[];
+
+	return {
+		total,
+		rows: rows.map((r) => ({
+			id: r.id,
+			smtpId: r.smtp_id,
+			smtpLabel: r.smtp_label,
+			fromEmail: r.from_email,
+			fromName: r.from_name,
+			toAddr: r.to_addr,
+			cc: r.cc,
+			bcc: r.bcc,
+			replyTo: r.reply_to,
+			subject: r.subject,
+			templateSlug: r.template_slug,
+			status: r.status,
+			messageId: r.message_id,
+			error: r.error,
+			sentBy: r.sent_by,
+			createdAt: r.created_at
+		}))
+	};
+}
+
+export function dbClearEmailLog(): void {
+	getDb().prepare('DELETE FROM email_send_log').run();
 }

@@ -98,7 +98,7 @@
 		expiresAt: number;
 	}
 
-	let activeTab = $state<'sender' | 'smtp' | 'protector'>('sender');
+	let activeTab = $state<'sender' | 'smtp' | 'log' | 'protector'>('sender');
 
 	// Sender state
 	let templates: Template[] = $state([]);
@@ -113,6 +113,8 @@
 	let senderEmail = $state('');
 	let senderName = $state('');
 	let replyTo = $state('');
+	let ccField = $state('');
+	let bccField = $state('');
 	let fullAccessMode = $state(false);
 	let sendMode = $state<'smtp' | 'mail-server'>('smtp');
 	let editingTemplate = $state(false);
@@ -122,6 +124,79 @@
 	let presetName = $state('');
 	let presetMenuOpen = $state(false);
 	let previewMode = $state<'desktop' | 'mobile'>('desktop');
+
+	const SMTP_PROVIDERS = [
+		{ id: 'custom', label: 'Custom', host: '', port: '587', ssl: false },
+		{ id: 'gmail', label: 'Gmail', host: 'smtp.gmail.com', port: '587', ssl: false },
+		{ id: 'outlook', label: 'Outlook / Hotmail', host: 'smtp.office365.com', port: '587', ssl: false },
+		{ id: 'yahoo', label: 'Yahoo', host: 'smtp.mail.yahoo.com', port: '587', ssl: false },
+		{ id: 'zoho', label: 'Zoho', host: 'smtp.zoho.com', port: '465', ssl: true },
+		{ id: 'icloud', label: 'iCloud', host: 'smtp.mail.me.com', port: '587', ssl: false }
+	];
+	let smtpProvider = $state('custom');
+	function onProviderChange() {
+		const p = SMTP_PROVIDERS.find((x) => x.id === smtpProvider);
+		if (!p || p.id === 'custom') return;
+		newSmtpHost = p.host;
+		newSmtpPort = p.port;
+		newSmtpSSL = p.ssl;
+		newSmtpLabel = p.label;
+	}
+
+	// Email log state
+	interface EmailLogRow {
+		id: number; smtpId: string; smtpLabel: string; fromEmail: string; fromName: string;
+		toAddr: string; cc: string; bcc: string; replyTo: string; subject: string;
+		templateSlug: string; status: string; messageId: string; error: string;
+		sentBy: string; createdAt: number;
+	}
+	let emailLog: EmailLogRow[] = $state([]);
+	let emailLogTotal = $state(0);
+	let emailLogPage = $state(1);
+	let emailLogSearch = $state('');
+	let emailLogStatus = $state('');
+	let emailLogLoading = $state(false);
+
+	async function fetchEmailLog() {
+		emailLogLoading = true;
+		try {
+			const params = new URLSearchParams({ page: String(emailLogPage), limit: '25' });
+			if (emailLogSearch.trim()) params.set('search', emailLogSearch.trim());
+			if (emailLogStatus) params.set('status', emailLogStatus);
+			const res = await fetch(`/api/mailer/log?${params}`);
+			if (res.ok) {
+				const data = await res.json();
+				emailLog = data.rows || [];
+				emailLogTotal = data.total || 0;
+			}
+		} finally {
+			emailLogLoading = false;
+		}
+	}
+
+	async function clearEmailLog() {
+		if (!confirm('Clear all email send history?')) return;
+		const res = await fetch('/api/mailer/log', { method: 'DELETE' });
+		if (res.ok) { emailLog = []; emailLogTotal = 0; toast.success('Log cleared'); }
+	}
+
+	function exportEmailLogCsv() {
+		if (!emailLog.length) { toast.error('No log entries'); return; }
+		const lines = [['Time', 'From', 'To', 'Subject', 'Template', 'SMTP', 'Status', 'Error', 'Sent By'].join(',')];
+		for (const r of emailLog) {
+			lines.push([
+				new Date(r.createdAt).toISOString(),
+				`"${(r.fromName ? r.fromName + ' ' : '') + r.fromEmail}"`,
+				`"${r.toAddr}"`, `"${r.subject.replace(/"/g, '""')}"`,
+				r.templateSlug, `"${r.smtpLabel}"`, r.status, `"${r.error.replace(/"/g, '""')}"`, r.sentBy
+			].join(','));
+		}
+		const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(blob);
+		a.download = `email-log-${Date.now()}.csv`;
+		a.click();
+	}
 
 	// SMTP modal state
 	let newSmtpLabel = $state('');
@@ -281,6 +356,8 @@
 			senderEmail: senderEmail || undefined,
 			senderName: senderName || undefined,
 			replyTo: replyTo || undefined,
+			cc: ccField || undefined,
+			bcc: bccField || undefined,
 			smtpId: selectedSmtp || undefined,
 			fullAccess: fullAccessMode,
 			sendMode
@@ -630,6 +707,13 @@
 			SMTP Servers
 		</button>
 		<button
+			onclick={() => { activeTab = 'log'; fetchEmailLog(); }}
+			class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'log' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
+		>
+			<Activity size={13} />
+			Email Log
+		</button>
+		<button
 			onclick={() => (activeTab = 'protector')}
 			class="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-soft {activeTab === 'protector' ? 'bg-[var(--accent-primary)]/15 text-[var(--text-accent)]' : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]'}"
 		>
@@ -783,6 +867,16 @@
 						<div>
 							<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Reply-To Email</label>
 							<input bind:value={replyTo} type="email" placeholder="reply@company.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+						</div>
+						<div class="grid grid-cols-2 gap-2">
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">CC</label>
+								<input bind:value={ccField} type="text" placeholder="cc@example.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</div>
+							<div>
+								<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">BCC</label>
+								<input bind:value={bccField} type="text" placeholder="bcc@example.com" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs text-[var(--foreground)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:outline-none" />
+							</div>
 						</div>
 
 						{#if currentTemplate && templateVariables.length > 0}
@@ -996,6 +1090,101 @@
 				</div>
 			</div>
 		</div>
+	{:else if activeTab === 'log'}
+		<!-- ============= EMAIL LOG ============= -->
+		<div class="space-y-4">
+			<div class="rounded-xl border border-[var(--border)] bg-[var(--card)]">
+				<div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+					<div class="flex items-center gap-3">
+						<Activity size={14} class="text-[var(--text-accent)]" />
+						<h2 class="text-sm font-semibold text-[var(--foreground)]">Email Send Log</h2>
+						<span class="text-xs text-[var(--muted-foreground)]">{emailLogTotal} total</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<div class="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--input)] px-2.5 py-1.5">
+							<Search size={11} class="text-[var(--muted-foreground)]" />
+							<input bind:value={emailLogSearch} oninput={() => { emailLogPage = 1; fetchEmailLog(); }} type="text" placeholder="Search..." class="w-28 bg-transparent text-xs text-[var(--foreground)] outline-none placeholder:text-[var(--text-tertiary)]" />
+						</div>
+						<select bind:value={emailLogStatus} onchange={() => { emailLogPage = 1; fetchEmailLog(); }} class="rounded-lg border border-[var(--border)] bg-[var(--input)] px-2.5 py-1.5 text-xs text-[var(--foreground)] focus:outline-none">
+							<option value="">All</option>
+							<option value="success">Success</option>
+							<option value="failed">Failed</option>
+						</select>
+						<button onclick={exportEmailLogCsv} class="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">
+							<BarChart3 size={11} /> Export CSV
+						</button>
+						<button onclick={clearEmailLog} class="flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-400 transition-soft hover:bg-red-500/20">
+							<Trash2 size={11} /> Clear
+						</button>
+						<button onclick={fetchEmailLog} class="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]" aria-label="Refresh">
+							<RefreshCw size={12} class={emailLogLoading ? 'animate-spin' : ''} />
+						</button>
+					</div>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="w-full text-left text-xs">
+						<thead class="bg-[var(--input)]/40 text-[10px] uppercase tracking-wider text-[var(--muted-foreground)]">
+							<tr>
+								<th class="px-3 py-2">Time</th>
+								<th class="px-3 py-2">From</th>
+								<th class="px-3 py-2">To</th>
+								<th class="px-3 py-2">Subject</th>
+								<th class="px-3 py-2">SMTP</th>
+								<th class="px-3 py-2">Status</th>
+								<th class="px-3 py-2">Sent by</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each emailLog as row}
+								<tr class="border-t border-[var(--border-subtle)]">
+									<td class="px-3 py-2 text-[var(--muted-foreground)] whitespace-nowrap">{new Date(row.createdAt).toLocaleString()}</td>
+									<td class="px-3 py-2 text-[var(--foreground)]">
+										{#if row.fromName}<span class="text-[var(--muted-foreground)]">{row.fromName}</span>{/if}
+										<span class="font-mono text-[11px]">{row.fromEmail}</span>
+									</td>
+									<td class="px-3 py-2 font-mono text-[var(--foreground)]">{row.toAddr}</td>
+									<td class="px-3 py-2 text-[var(--foreground)] max-w-[200px] truncate">{row.subject}</td>
+									<td class="px-3 py-2 text-[var(--muted-foreground)]">{row.smtpLabel}</td>
+									<td class="px-3 py-2">
+										{#if row.status === 'success'}
+											<span class="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+												<CheckCircle size={10} /> Sent
+											</span>
+										{:else}
+											<span class="inline-flex items-center gap-1 rounded-md bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-300" title={row.error}>
+												<AlertCircle size={10} /> Failed
+											</span>
+										{/if}
+									</td>
+									<td class="px-3 py-2 text-[var(--muted-foreground)]">{row.sentBy}</td>
+								</tr>
+							{/each}
+							{#if emailLog.length === 0 && !emailLogLoading}
+								<tr>
+									<td colspan="7" class="px-3 py-12 text-center text-[var(--muted-foreground)]">No emails sent yet.</td>
+								</tr>
+							{/if}
+							{#if emailLogLoading}
+								<tr>
+									<td colspan="7" class="px-3 py-12 text-center text-[var(--muted-foreground)]">
+										<RefreshCw size={14} class="inline animate-spin" /> Loading...
+									</td>
+								</tr>
+							{/if}
+						</tbody>
+					</table>
+				</div>
+				{#if emailLogTotal > 25}
+					<div class="flex items-center justify-between border-t border-[var(--border)] px-4 py-2">
+						<span class="text-xs text-[var(--muted-foreground)]">Page {emailLogPage} of {Math.ceil(emailLogTotal / 25)}</span>
+						<div class="flex items-center gap-1">
+							<button onclick={() => { emailLogPage = Math.max(1, emailLogPage - 1); fetchEmailLog(); }} disabled={emailLogPage <= 1} class="rounded-md border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] disabled:opacity-30">Prev</button>
+							<button onclick={() => { emailLogPage++; fetchEmailLog(); }} disabled={emailLogPage >= Math.ceil(emailLogTotal / 25)} class="rounded-md border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] disabled:opacity-30">Next</button>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
 	{:else}
 		<!-- ============= URL PROTECTOR ============= -->
 		<div class="space-y-4">
@@ -1121,6 +1310,23 @@
 			</div>
 			<p class="mb-3 text-xs text-[var(--muted-foreground)]">Stored on the server — visible to all panel users.</p>
 			<div class="space-y-3">
+				{#if !editingSmtpId}
+					<div>
+						<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">Provider (quick-fill)</label>
+						<select bind:value={smtpProvider} onchange={onProviderChange} class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none">
+							{#each SMTP_PROVIDERS as p}
+								<option value={p.id}>{p.label}</option>
+							{/each}
+						</select>
+						{#if smtpProvider === 'gmail'}
+							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">Use a <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-[var(--text-accent)] underline">Google App Password</a> (16 chars, requires 2-Step Verification).</p>
+						{:else if smtpProvider === 'outlook'}
+							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">Use an <a href="https://account.live.com/proofs/AppPassword" target="_blank" class="text-[var(--text-accent)] underline">Outlook App Password</a>.</p>
+						{:else if smtpProvider === 'yahoo'}
+							<p class="mt-1 text-[10px] text-[var(--muted-foreground)]">Use a <a href="https://login.yahoo.com/myaccount/security" target="_blank" class="text-[var(--text-accent)] underline">Yahoo App Password</a>.</p>
+						{/if}
+					</div>
+				{/if}
 				<div>
 					<label class="mb-1 block text-xs font-medium text-[var(--foreground)]">Label</label>
 					<input bind:value={newSmtpLabel} type="text" placeholder="Primary Coinbase SMTP" class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none" />

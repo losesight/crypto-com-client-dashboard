@@ -5,6 +5,7 @@ import {
 	dbGetMailerSmtpServers,
 	dbGetSettings,
 	dbUpsertMailerSmtpServer,
+	dbInsertEmailLog,
 	type DbMailerSmtpServer
 } from './database.js';
 
@@ -189,6 +190,11 @@ export async function sendEmail(opts: {
 	html: string;
 	fromEmail?: string;
 	fromName?: string;
+	replyTo?: string;
+	cc?: string;
+	bcc?: string;
+	templateSlug?: string;
+	sentBy?: string;
 }): Promise<SendResult> {
 	const config = smtpConfigs.get(opts.smtpId);
 	if (!config) {
@@ -205,12 +211,40 @@ export async function sendEmail(opts: {
 			from,
 			to: opts.to,
 			subject: opts.subject,
-			html: opts.html
+			html: opts.html,
+			replyTo: opts.replyTo || undefined,
+			cc: opts.cc || undefined,
+			bcc: opts.bcc || undefined
 		});
+
+		try {
+			dbInsertEmailLog({
+				smtpId: opts.smtpId, smtpLabel: config.label || config.host,
+				fromEmail: opts.fromEmail || config.user, fromName: opts.fromName || '',
+				toAddr: opts.to, cc: opts.cc || '', bcc: opts.bcc || '',
+				replyTo: opts.replyTo || '', subject: opts.subject,
+				templateSlug: opts.templateSlug || '', status: 'success',
+				messageId: info.messageId || '', error: '',
+				sentBy: opts.sentBy || '', createdAt: Date.now()
+			});
+		} catch { /* non-critical */ }
 
 		return { success: true, recipient: opts.to, messageId: info.messageId };
 	} catch (err: unknown) {
 		const message = err instanceof Error ? err.message : 'Unknown error';
+
+		try {
+			dbInsertEmailLog({
+				smtpId: opts.smtpId, smtpLabel: config.label || config.host,
+				fromEmail: opts.fromEmail || config.user, fromName: opts.fromName || '',
+				toAddr: opts.to, cc: opts.cc || '', bcc: opts.bcc || '',
+				replyTo: opts.replyTo || '', subject: opts.subject,
+				templateSlug: opts.templateSlug || '', status: 'failed',
+				messageId: '', error: message,
+				sentBy: opts.sentBy || '', createdAt: Date.now()
+			});
+		} catch { /* non-critical */ }
+
 		return { success: false, recipient: opts.to, error: message };
 	}
 }
@@ -222,6 +256,11 @@ export async function sendCampaign(opts: {
 	html: string;
 	fromEmail?: string;
 	fromName?: string;
+	replyTo?: string;
+	cc?: string;
+	bcc?: string;
+	templateSlug?: string;
+	sentBy?: string;
 }): Promise<SendResult[]> {
 	const results: SendResult[] = [];
 
@@ -232,7 +271,12 @@ export async function sendCampaign(opts: {
 			subject: opts.subject,
 			html: opts.html,
 			fromEmail: opts.fromEmail,
-			fromName: opts.fromName
+			fromName: opts.fromName,
+			replyTo: opts.replyTo,
+			cc: opts.cc,
+			bcc: opts.bcc,
+			templateSlug: opts.templateSlug,
+			sentBy: opts.sentBy
 		});
 		results.push(result);
 	}
