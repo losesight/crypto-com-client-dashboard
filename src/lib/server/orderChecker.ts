@@ -117,19 +117,24 @@ export function loadOrderCheckerConfig(): OrderCheckerConfig {
  * Replace {{key}} placeholders in `template` with values from `vars`.
  *
  * Encoding is chosen to match the body format:
- *  - URL-encoded form bodies (contain `%` or `&key=`) → use encodeURIComponent
- *  - JSON bodies                                       → escape for inside a JSON string
- *  - anything else                                     → raw substitution
+ *  - URL-encoded form bodies → use encodeURIComponent
+ *  - JSON bodies             → escape for inside a JSON string
+ *  - anything else           → raw substitution
+ *
+ * Detection uses the explicit `contentType` header when available, falling
+ * back to body heuristics for backward compatibility.
  */
-function renderTemplate(template: string, vars: Record<string, string>): string {
-	const looksFormEncoded =
-		/(^|[&?])[\w[\]\-.+%]+=/.test(template) && /%[0-9A-Fa-f]{2}/.test(template);
-	const looksJson = !looksFormEncoded && /^\s*[{[]/.test(template);
+function renderTemplate(template: string, vars: Record<string, string>, contentType?: string): string {
+	const ctLower = (contentType || '').toLowerCase();
+	const isFormEncoded = ctLower.includes('x-www-form-urlencoded') ||
+		(/(^|[&?])[\w[\]\-.+%]+=/.test(template) &&
+			(/%[0-9A-Fa-f]{2}/.test(template) || /\[\w+\]/.test(template)));
+	const isJson = !isFormEncoded && (ctLower.includes('application/json') || /^\s*[{[]/.test(template));
 	return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
 		const v = vars[key];
 		if (v == null) return '';
-		if (looksFormEncoded) return encodeURIComponent(v);
-		if (looksJson) return JSON.stringify(v).slice(1, -1);
+		if (isFormEncoded) return encodeURIComponent(v);
+		if (isJson) return JSON.stringify(v).slice(1, -1);
 		return v;
 	});
 }
@@ -176,7 +181,8 @@ async function probeOnce(
 	mode: ProbeMode,
 	parentSignal?: AbortSignal
 ): Promise<OrderRunSample> {
-	const body = renderTemplate(cfg.bodyTemplate, pairForMode(pair, mode));
+	const ct = cfg.headers['content-type'] || cfg.headers['Content-Type'] || '';
+	const body = renderTemplate(cfg.bodyTemplate, pairForMode(pair, mode), ct);
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), cfg.timeoutMs);
 	const abortBridge = () => controller.abort();
@@ -482,19 +488,42 @@ function tokenizeShell(input: string): string[] {
 }
 
 /**
+ * Form-field names whose values are single-use tokens (Cloudflare Turnstile,
+ * Symfony CSRF, empty save field). Stripping them from the template prevents
+ * every re-probe from failing on a burned token before hitting the DB.
+ */
+const SINGLE_USE_FORM_FIELDS = [
+	'cf-turnstile-response',
+	'my_order_login_form[_token]',
+	'my_order_login_form[save]'
+];
+
+function stripSingleUseFormFields(body: string): string {
+	let out = body;
+	for (const field of SINGLE_USE_FORM_FIELDS) {
+		const escaped = field.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+		out = out.replace(new RegExp(`(?:^|&)${escaped}=[^&]*`, 'g'), '');
+	}
+	if (out.startsWith('&')) out = out.slice(1);
+	return out;
+}
+
+/**
  * Given a sample request body captured from DevTools, replace the literal
  * email / orderRef strings with the template placeholders so it can be reused
  * as the body template.
  *
- * Tries both raw and URL-encoded forms of the values, because browsers usually
- * post form-urlencoded bodies where `@` becomes `%40` etc.
+ * Tries raw, URL-encoded, and URL-decoded forms of the values to handle
+ * form-urlencoded bodies where `@` becomes `%40` etc. Also strips known
+ * single-use token fields (Turnstile, CSRF) that would invalidate re-probes.
  */
 export function bodyToTemplate(body: string, email: string, orderRef: string): string {
 	if (!body) return body;
-	let out = body;
+	let out = stripSingleUseFormFields(body);
 	const replaceVariants = (value: string, placeholder: string) => {
 		if (!value) return;
 		const variants = new Set<string>([value, encodeURIComponent(value)]);
+		try { variants.add(decodeURIComponent(value)); } catch { /* already decoded */ }
 		for (const v of variants) {
 			const safe = v.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
 			out = out.replace(new RegExp(safe, 'gi'), placeholder);
