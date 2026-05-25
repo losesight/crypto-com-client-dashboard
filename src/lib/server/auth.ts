@@ -64,7 +64,9 @@ export function logout(token: string): void {
 
 import { error } from '@sveltejs/kit';
 
-export function requireAdmin(locals: App.Locals): void {
+export function requireAdmin(
+	locals: App.Locals
+): asserts locals is App.Locals & { user: SessionUser } {
 	if (!locals.user) throw error(401, 'Unauthorized');
 	if (locals.user.role !== 'admin') throw error(403, 'Forbidden');
 }

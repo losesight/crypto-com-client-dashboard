@@ -83,6 +83,14 @@ function pickNumber(value: string | undefined, fallback: number): number {
 	return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+// Same as pickNumber, but allows 0 (used for jitter where the operator may want
+// to deliberately disable randomized delays).
+function pickNonNegative(value: string | undefined, fallback: number): number {
+	if (value == null || value === '') return fallback;
+	const n = Number(value);
+	return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 function parseHeaders(raw: string | undefined): Record<string, string> {
 	if (!raw) return {};
 	try {
@@ -108,7 +116,7 @@ export function loadOrderCheckerConfig(): OrderCheckerConfig {
 		threshold: pickNumber(raw['order_checker.valid_threshold_ms'], 800),
 		concurrency: Math.min(10, Math.max(1, pickNumber(raw['order_checker.concurrency'], 3))),
 		runs: Math.min(8, Math.max(1, pickNumber(raw['order_checker.runs_per_pair'], 2))),
-		jitterMs: Math.max(0, pickNumber(raw['order_checker.jitter_ms'], 120)),
+		jitterMs: Math.max(0, pickNonNegative(raw['order_checker.jitter_ms'], 120)),
 		timeoutMs: Math.max(500, pickNumber(raw['order_checker.request_timeout_ms'], 8000))
 	};
 }

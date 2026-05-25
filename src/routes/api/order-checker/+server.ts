@@ -128,10 +128,23 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const username = locals.user.username;
 	const shouldSave = body.save !== false;
 
+	// Bridge: client cancels (closes stream / aborts fetch) → abort the worker pool.
+	const runController = new AbortController();
+	const clientSignal = request.signal;
+	const onClientAbort = () => runController.abort();
+	if (clientSignal) {
+		if (clientSignal.aborted) runController.abort();
+		else clientSignal.addEventListener('abort', onClientAbort, { once: true });
+	}
+
 	const stream = new ReadableStream<Uint8Array>({
 		async start(controller) {
 			const send = (payload: unknown) => {
-				controller.enqueue(encoder.encode(JSON.stringify(payload) + '\n'));
+				try {
+					controller.enqueue(encoder.encode(JSON.stringify(payload) + '\n'));
+				} catch {
+					// stream already closed (client disconnected) — drop silently
+				}
 			};
 
 			send({ type: 'start', total: pairs.length, mode });
@@ -141,6 +154,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			try {
 				const { summary } = await runOrderCheckBatch(pairs, {
 					...opts,
+					abortSignal: runController.signal,
 					onResult: (result) => {
 						collected.push(result);
 						send({ type: 'result', result });
@@ -148,7 +162,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 				});
 
 				let batchId: string | undefined;
-				if (shouldSave) {
+				if (shouldSave && !runController.signal.aborted) {
 					try {
 						const saved = dbInsertOrderBatch({
 							createdBy: username,
@@ -171,8 +185,16 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 					message: err instanceof Error ? err.message : 'batch failed'
 				});
 			} finally {
-				controller.close();
+				if (clientSignal) clientSignal.removeEventListener('abort', onClientAbort);
+				try {
+					controller.close();
+				} catch {
+					// already closed
+				}
 			}
+		},
+		cancel() {
+			runController.abort();
 		}
 	});
 

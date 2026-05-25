@@ -71,11 +71,6 @@
 
 	const DIAGNOSTIC = { email: 'ooyeleye0@gmail.com', orderRef: 'LDG3530088' };
 
-	let hasSingleUseTokens = $derived(
-		/cf-turnstile-response|_token\]/.test(overrideBody) ||
-		/cf-turnstile-response|_token\]/.test(config?.probeUrl || '')
-	);
-
 	// A/B diagnostic state
 	let abCurlA = $state('');
 	let abCurlB = $state('');
@@ -150,13 +145,23 @@
 		}
 	}
 
+	// A/B verdict:
+	//   - 'error'        : either probe blew up
+	//   - 'viable'       : A (known-valid) is meaningfully SLOWER than B (known-invalid).
+	//                       This is what a timing oracle should look like.
+	//   - 'inverted'     : A is meaningfully FASTER than B. Significant gap, wrong direction
+	//                       (probably the labels are swapped or the endpoint short-circuits
+	//                       differently than expected).
+	//   - 'inconclusive' : Gap is too small to distinguish.
 	let abVerdict = $derived.by(() => {
 		if (!abResultA || !abResultB) return null;
 		if (abResultA.error || abResultB.error) return 'error';
-		const diff = Math.abs(abResultA.elapsedMs - abResultB.elapsedMs);
+		const delta = abResultA.elapsedMs - abResultB.elapsedMs; // signed: A - B
+		const absDelta = Math.abs(delta);
 		const max = Math.max(abResultA.elapsedMs, abResultB.elapsedMs);
-		if (diff > 200 && diff > max * 0.3) return 'viable';
-		return 'inconclusive';
+		const significant = absDelta > 200 && absDelta > max * 0.3;
+		if (!significant) return 'inconclusive';
+		return delta > 0 ? 'viable' : 'inverted';
 	});
 
 	let results: ProbeResult[] = $state([]);
@@ -184,6 +189,13 @@
 	);
 	let validCount = $derived(results.filter((r) => r.inferredValid).length);
 	let erroredCount = $derived(results.filter((r) => !!r.error).length);
+
+	// Detect Turnstile / Symfony CSRF / similar single-use fields in the per-batch
+	// body override. The server never echoes the saved body template back to the
+	// client, so this can only flag what the operator has pasted locally.
+	let hasSingleUseTokens = $derived(
+		/cf-turnstile-response|_token\]/.test(overrideBody)
+	);
 
 	onMount(() => {
 		void refreshHistory();
@@ -560,7 +572,7 @@
 		<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
 			<div class="mb-3 flex items-center justify-between">
 				<h2 class="text-sm font-semibold text-[var(--foreground)]">A/B Diagnostic — Single-probe comparison</h2>
-				<button type="button" onclick={() => (showAbDiag = false)} class="rounded-md p-1 text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">
+				<button type="button" onclick={() => (showAbDiag = false)} aria-label="Close A/B diagnostic" title="Close" class="rounded-md p-1 text-[var(--muted-foreground)] transition-soft hover:bg-[var(--accent)]">
 					<Square size={12} />
 				</button>
 			</div>
@@ -570,10 +582,11 @@
 			</p>
 			<div class="grid gap-4 md:grid-cols-2">
 				<div>
-					<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+					<label for="ab-curl-a" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
 						Probe A — known-valid pair
 					</label>
 					<textarea
+						id="ab-curl-a"
 						bind:value={abCurlA}
 						rows="3"
 						spellcheck="false"
@@ -600,10 +613,11 @@
 					{/if}
 				</div>
 				<div>
-					<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+					<label for="ab-curl-b" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
 						Probe B — known-invalid pair
 					</label>
 					<textarea
+						id="ab-curl-b"
 						bind:value={abCurlB}
 						rows="3"
 						spellcheck="false"
@@ -631,11 +645,15 @@
 				</div>
 			</div>
 			{#if abVerdict}
-				<div class="mt-4 rounded-md border p-3 text-xs leading-relaxed {abVerdict === 'viable' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : abVerdict === 'error' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-[var(--border)] bg-[var(--input)]/30 text-[var(--muted-foreground)]'}">
+				<div class="mt-4 rounded-md border p-3 text-xs leading-relaxed {abVerdict === 'viable' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : abVerdict === 'error' || abVerdict === 'inverted' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-[var(--border)] bg-[var(--input)]/30 text-[var(--muted-foreground)]'}">
 					{#if abVerdict === 'viable'}
 						<strong>Timing oracle looks viable.</strong>
 						A = {abResultA?.elapsedMs}ms, B = {abResultB?.elapsedMs}ms (delta: {Math.abs((abResultA?.elapsedMs ?? 0) - (abResultB?.elapsedMs ?? 0))}ms).
 						The valid pair took measurably longer, suggesting a DB hit. You can proceed with batch checking — but each probe needs a fresh cURL capture with valid Turnstile + CSRF tokens.
+					{:else if abVerdict === 'inverted'}
+						<strong>Direction inverted.</strong>
+						A = {abResultA?.elapsedMs}ms, B = {abResultB?.elapsedMs}ms (delta: {Math.abs((abResultA?.elapsedMs ?? 0) - (abResultB?.elapsedMs ?? 0))}ms).
+						The known-valid pair came back faster than the known-invalid pair — the opposite of a real timing oracle. Likely causes: A and B were swapped, one cURL hit a cached/early-reject path, or the endpoint short-circuits on invalid input. Re-capture both with fresh tokens and double-check which is which.
 					{:else if abVerdict === 'error'}
 						<strong>One or both probes errored.</strong>
 						Token may have been burned, cf_clearance expired, or the session cookie is invalid. Re-capture both cURLs from a fresh page load.
@@ -720,10 +738,11 @@
 					</summary>
 					<div class="space-y-3 border-t border-[var(--border)] p-3">
 						<div>
-							<label class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+							<label for="oc-curl-input" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
 								Paste cURL from DevTools
 							</label>
 							<textarea
+								id="oc-curl-input"
 								bind:value={curlInput}
 								rows="3"
 								spellcheck="false"
